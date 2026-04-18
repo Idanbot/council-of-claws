@@ -10,8 +10,8 @@ RUN apk add --no-cache musl-dev
 ENV CARGO_REGISTRIES_CRATES_IO_PROTOCOL=sparse
 ENV CARGO_TARGET_DIR=/target
 
-# Copy only dependency-related files first
-COPY Cargo.toml Cargo.lock /app/
+# Copy dependency manifest first
+COPY Cargo.toml /app/
 
 # Build dummy project to cache dependencies
 RUN mkdir -p /app/src \
