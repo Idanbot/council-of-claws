@@ -92,7 +92,7 @@ CREATE TABLE IF NOT EXISTS agents (
     display_name TEXT NOT NULL,
     role TEXT NOT NULL,
     enabled BOOLEAN NOT NULL DEFAULT TRUE,
-    scope_profile TEXT,
+    scope_profile JSONB,
     secret_id TEXT,
     secret_hash TEXT,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -126,22 +126,7 @@ CREATE TABLE IF NOT EXISTS council_votes (
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- 2. Update agents table to ensure scope_profile is used
--- (Column already exists but we ensure it's JSONB for granular control)
-ALTER TABLE agents ALTER COLUMN scope_profile TYPE JSONB USING scope_profile::JSONB;
-
 -- Clean Real Schema (No Seeds)
--- This ensures zero tokens and zero tasks on fresh start
-
-DELETE FROM tasks;
-DELETE FROM missions;
-DELETE FROM model_usage;
-DELETE FROM agent_runs;
-DELETE FROM task_events;
-DELETE FROM audit_events;
-DELETE FROM council_votes;
-DELETE FROM council_rounds;
-DELETE FROM council_runs;
 
 -- Only keep the core agent identities with no secrets (fallback mode)
 INSERT INTO agents (id, display_name, role, enabled, scope_profile) VALUES
