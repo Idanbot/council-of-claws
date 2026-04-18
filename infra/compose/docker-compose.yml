@@ -124,12 +124,16 @@ services:
 
   gateway:
     <<: *defaults
-    image: ${OPENCLAW_IMAGE:-ghcr.io/openclaw/openclaw@sha256:9d5f1dfbd5deedc37706c78f745b958ffbe9b4f20840cfb4d49c617a50326902}
+    build:
+      context: ../../apps/gateway
+      args:
+        OPENCLAW_BASE_IMAGE: ${OPENCLAW_IMAGE:-ghcr.io/openclaw/openclaw@sha256:9d5f1dfbd5deedc37706c78f745b958ffbe9b4f20840cfb4d49c617a50326902}
+    image: ${GATEWAY_IMAGE:-council/gateway:local}
     command:
       [
         "sh",
         "-c",
-        "mkdir -p /home/node/.openclaw/config && cp /bootstrap-config/openclaw.json5 /home/node/.openclaw/config/openclaw.json5 && exec openclaw gateway run"
+        "mkdir -p /home/node/.openclaw/config && cp /opt/council/bootstrap-config/openclaw.json5 /home/node/.openclaw/config/openclaw.json5 && exec openclaw gateway run"
       ]
     env_file:
       - path: ../../.env
@@ -165,7 +169,6 @@ services:
       - ../../LICENSE:/repo/LICENSE:ro
       - ../../.env.example:/repo/.env.example:ro
       - ../../.gitignore:/repo/.gitignore:ro
-      - ../../apps/gateway/config:/bootstrap-config:ro
     depends_on:
       redis:
         condition: service_healthy

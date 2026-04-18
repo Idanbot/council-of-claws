@@ -43,7 +43,7 @@
         <div class="text-[9px] font-black uppercase tracking-[0.3em] text-indigo-400">Total Throughput</div>
         <p class="mt-6 text-5xl font-black tabular-nums tracking-tighter text-white">{summary.total_tokens.toLocaleString()}</p>
         <p class="text-[10px] font-bold text-indigo-500/60 uppercase mt-2">Tokens Processed</p>
-        
+
         <div class="mt-12 flex justify-between items-end border-t border-indigo-500/10 pt-6">
           <div class="text-[9px] font-black text-slate-500 uppercase tracking-widest text-left">Projected Cost</div>
           <div class="text-2xl font-black font-mono text-white tracking-tighter">${summary.total_cost_usd.toFixed(4)}</div>
@@ -61,9 +61,9 @@
                 <span class="text-[10px] font-bold text-slate-500 tabular-nums uppercase">{model.tokens.toLocaleString()} TOKENS</span>
               </div>
               <div class="h-1.5 w-full rounded-full bg-white/5 overflow-hidden">
-                <div 
-                  class="h-full bg-indigo-500 shadow-[0_0_10px_rgba(99,102,241,0.5)] transition-all duration-1000 ease-out" 
-                  style="width: {(model.tokens / summary.total_tokens * 100)}%" 
+                <div
+                  class="h-full bg-indigo-500 shadow-[0_0_10px_rgba(99,102,241,0.5)] transition-all duration-1000 ease-out"
+                  style="width: {(model.tokens / summary.total_tokens * 100)}%"
                 ></div>
               </div>
             </div>

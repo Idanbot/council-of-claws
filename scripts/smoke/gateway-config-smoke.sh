@@ -50,8 +50,18 @@ if ! grep -Eq 'OPENCLAW_GATEWAY_TOKEN: \$\{OPENCLAW_GATEWAY_TOKEN:-council-local
   exit 1
 fi
 
-if ! grep -Eq '/bootstrap-config:ro' "$COMPOSE_FILE"; then
-  echo "Missing read-only bootstrap config mount in $COMPOSE_FILE"
+if ! grep -Eq 'context: ../../apps/gateway' "$COMPOSE_FILE"; then
+  echo "Missing gateway image build context in $COMPOSE_FILE"
+  exit 1
+fi
+
+if ! grep -Eq 'OPENCLAW_BASE_IMAGE:' "$COMPOSE_FILE"; then
+  echo "Missing gateway base image build arg in $COMPOSE_FILE"
+  exit 1
+fi
+
+if ! grep -Eq '/opt/council/bootstrap-config/openclaw.json5' "$COMPOSE_FILE"; then
+  echo "Missing baked bootstrap config copy path in $COMPOSE_FILE"
   exit 1
 fi
 

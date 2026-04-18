@@ -13,7 +13,7 @@ The Council of Claws is a multi-agent orchestration platform designed for autono
 ### 2. Rust Backend (The Controller)
 - **Role:** The central authority for the platform's state and business logic.
 - **Function:** Manages Missions, Tasks, and Audit Logs. Provides the `coc-tool` skill used by agents.
-- **Features:** 
+- **Features:**
   - **Audit Service:** Durable logging of all agent operations.
   - **WebSocket Hub:** Real-time broadcasting of events to the dashboard.
   - **Auth:** Strict Argon2-based identity verification for agents.

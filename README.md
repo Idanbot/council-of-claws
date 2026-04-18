@@ -12,6 +12,7 @@ The Council of Claws is an autonomous platform powered by **OpenClaw** and a hig
 - **Narrative Memory:** Automated generation of human-readable Markdown summaries for every mission and task.
 - **Advanced Auth & RBAC:** Argon2-backed backend identity verification and fine-grained scope profiles for each agent.
 - **Project Skills:** Repo-local OpenClaw skills are loaded from `.agents/skills` and scoped per agent.
+- **Pinned Gateway Image:** The gateway service builds from a small project-owned wrapper image pinned to a validated OpenClaw base digest.
 - **Telegram Optional:** Telegram support is auto-enabled by OpenClaw when `TELEGRAM_BOT_TOKEN` is configured.
 
 ## 🛠 Tech Stack
@@ -79,6 +80,32 @@ Project-scoped OpenClaw skills live in `.agents/skills` and are loaded into the 
 - **`obsidian-memory`**: Read-only inspection of the mounted Obsidian vault.
 
 The remote worker compose profile is still a placeholder and is not part of the v1 path.
+
+## 🐳 Image Publishing
+
+GitHub Actions now publishes app images to GitHub Container Registry after checks pass:
+- `council-of-claws-backend`
+- `council-of-claws-dashboard`
+- `council-of-claws-gateway`
+
+The images are published under:
+- `ghcr.io/<owner>/council-of-claws-backend`
+- `ghcr.io/<owner>/council-of-claws-dashboard`
+- `ghcr.io/<owner>/council-of-claws-gateway`
+
+The workflow uses the repository `GITHUB_TOKEN`, so you do not need separate Docker Hub credentials. For remote deploys, set `BACKEND_IMAGE`, `DASHBOARD_IMAGE`, and `GATEWAY_IMAGE` in `.env` to the GHCR tags you want to pull, then run:
+```bash
+make compose-pull
+make compose-up
+```
+
+If the repository or packages are private, the remote machine will need GHCR credentials to pull them.
+
+Optional workflow notifications:
+- `TELEGRAM_BOT_TOKEN` GitHub secret
+- `TELEGRAM_CHAT_ID` GitHub secret
+
+When both are set, the workflow sends a Telegram summary with the check results, per-image build decisions, and per-image publish status.
 
 ## 📦 Handoff
 

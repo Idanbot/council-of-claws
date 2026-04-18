@@ -30,7 +30,7 @@ export function initRealtime() {
     if (typeof window === 'undefined') return;
 
     let ws: WebSocket;
-    
+
     const connect = () => {
         ws = createWebSocket((msg: any) => {
             if (msg.event_type === 'connection') {

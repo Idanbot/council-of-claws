@@ -47,7 +47,7 @@
             <div class="col-span-1 flex justify-center">
                 <div class="h-1.5 w-1.5 rounded-full {log.allowed ? 'bg-emerald-500 shadow-[0_0_8px_#10b981]' : 'bg-rose-500'}"></div>
             </div>
-            
+
             <div class="col-span-2">
                 <span class="text-[10px] font-black text-white uppercase tracking-wider">
                     {log.agent_id || 'SYSTEM'}

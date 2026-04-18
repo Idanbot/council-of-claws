@@ -1,15 +1,23 @@
-name: CI
+name: CI/CD
 
 on:
   pull_request:
+    branches:
+      - main
+      - dev
   push:
     branches:
       - main
       - dev
+    tags:
+      - "v*.*.*"
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
+
+env:
+  REGISTRY: ghcr.io
 
 jobs:
   validate:
@@ -65,25 +73,333 @@ jobs:
       - name: Run OpenClaw runtime smoke test
         run: bash scripts/smoke/openclaw-runtime-smoke.sh
 
-  container-build:
+  check-images:
     runs-on: ubuntu-latest
-    needs: openclaw-smoke
+    permissions:
+      contents: read
+      packages: read
+    outputs:
+      backend: ${{ steps.decide.outputs.backend }}
+      dashboard: ${{ steps.decide.outputs.dashboard }}
+      gateway: ${{ steps.decide.outputs.gateway }}
     steps:
       - name: Checkout
         uses: actions/checkout@v6
 
-      - name: Build backend image when Dockerfile exists
-        run: |
-          if [ -f apps/backend/Dockerfile ]; then
-            docker build -t council/backend:ci apps/backend
-          else
-            echo "Skipping backend build; apps/backend/Dockerfile not found"
-          fi
+      - name: Filter paths for image rebuild
+        id: filter
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            backend:
+              - "apps/backend/**"
+            dashboard:
+              - "apps/dashboard/**"
+            gateway:
+              - "apps/gateway/**"
 
-      - name: Build dashboard image when Dockerfile exists
+      - name: Lowercase the owner name
         run: |
-          if [ -f apps/dashboard/Dockerfile ]; then
-            docker build -t council/dashboard:ci apps/dashboard
-          else
-            echo "Skipping dashboard build; apps/dashboard/Dockerfile not found"
-          fi
+          echo "OWNER_LC=${GITHUB_REPOSITORY_OWNER,,}" >> "${GITHUB_ENV}"
+
+      - name: Log in to registry ${{ env.REGISTRY }}
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Decide image builds
+        id: decide
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          decide_build() {
+            local changed="$1"
+            local image="$2"
+            local result="false"
+            local reason="no relevant changes"
+
+            if [[ "${GITHUB_REF}" == refs/tags/v*.*.* ]]; then
+              result="true"
+              reason="semver tag push"
+            elif [[ "$changed" == "true" ]]; then
+              result="true"
+              reason="image-relevant changes detected"
+            elif [[ "${{ github.event_name }}" == "pull_request" ]]; then
+              result="false"
+              reason="pull request with no image-relevant changes"
+            else
+              local tag="sha-${GITHUB_SHA}"
+              local image_ref="${REGISTRY}/${OWNER_LC}/${image}:${tag}"
+              if docker manifest inspect "${image_ref}" >/dev/null 2>&1; then
+                result="false"
+                reason="sha tag exists in registry"
+              else
+                result="true"
+                reason="sha tag missing in registry"
+              fi
+            fi
+
+            printf '%s\n' "$result"
+            echo "- ${image}: ${result} (${reason})" >> "$GITHUB_STEP_SUMMARY"
+          }
+
+          {
+            echo "### Build decision"
+            echo "- ref: ${GITHUB_REF}"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          echo "backend=$(decide_build '${{ steps.filter.outputs.backend }}' 'council-of-claws-backend')" >> "$GITHUB_OUTPUT"
+          echo "dashboard=$(decide_build '${{ steps.filter.outputs.dashboard }}' 'council-of-claws-dashboard')" >> "$GITHUB_OUTPUT"
+          echo "gateway=$(decide_build '${{ steps.filter.outputs.gateway }}' 'council-of-claws-gateway')" >> "$GITHUB_OUTPUT"
+
+  publish-backend:
+    runs-on: ubuntu-latest
+    needs: [openclaw-smoke, check-images]
+    if: needs.check-images.outputs.backend == 'true'
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Lowercase the owner name
+        run: |
+          echo "OWNER_LC=${GITHUB_REPOSITORY_OWNER,,}" >> "${GITHUB_ENV}"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to registry ${{ env.REGISTRY }}
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract Docker metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.OWNER_LC }}/council-of-claws-backend
+          tags: |
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=ref,event=branch
+            type=semver,pattern={{version}}
+            type=sha,prefix=sha-
+
+      - name: Build and push backend image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./apps/backend
+          file: ./apps/backend/Dockerfile
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+
+  publish-dashboard:
+    runs-on: ubuntu-latest
+    needs: [openclaw-smoke, check-images]
+    if: needs.check-images.outputs.dashboard == 'true'
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Lowercase the owner name
+        run: |
+          echo "OWNER_LC=${GITHUB_REPOSITORY_OWNER,,}" >> "${GITHUB_ENV}"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to registry ${{ env.REGISTRY }}
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract Docker metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.OWNER_LC }}/council-of-claws-dashboard
+          tags: |
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=ref,event=branch
+            type=semver,pattern={{version}}
+            type=sha,prefix=sha-
+
+      - name: Build and push dashboard image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./apps/dashboard
+          file: ./apps/dashboard/Dockerfile
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+
+  publish-gateway:
+    runs-on: ubuntu-latest
+    needs: [openclaw-smoke, check-images]
+    if: needs.check-images.outputs.gateway == 'true'
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Lowercase the owner name
+        run: |
+          echo "OWNER_LC=${GITHUB_REPOSITORY_OWNER,,}" >> "${GITHUB_ENV}"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to registry ${{ env.REGISTRY }}
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract Docker metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.OWNER_LC }}/council-of-claws-gateway
+          tags: |
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=ref,event=branch
+            type=semver,pattern={{version}}
+            type=sha,prefix=sha-
+
+      - name: Build and push gateway image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./apps/gateway
+          file: ./apps/gateway/Dockerfile
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            OPENCLAW_BASE_IMAGE=ghcr.io/openclaw/openclaw@sha256:9d5f1dfbd5deedc37706c78f745b958ffbe9b4f20840cfb4d49c617a50326902
+
+  notify:
+    name: Notify Telegram (Summary)
+    if: >-
+      always() &&
+      github.actor != 'dependabot[bot]' &&
+      github.event_name != 'pull_request'
+    needs:
+      - validate
+      - compose-smoke
+      - openclaw-smoke
+      - check-images
+      - publish-backend
+      - publish-dashboard
+      - publish-gateway
+    runs-on: ubuntu-latest
+    env:
+      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+      TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+    steps:
+      - name: Notify Telegram (Summary)
+        if: env.TELEGRAM_BOT_TOKEN != '' && env.TELEGRAM_CHAT_ID != ''
+        env:
+          STATUS_VALIDATE: ${{ needs.validate.result }}
+          STATUS_COMPOSE: ${{ needs.compose-smoke.result }}
+          STATUS_OPENCLAW: ${{ needs.openclaw-smoke.result }}
+          STATUS_BACKEND: ${{ needs.publish-backend.result }}
+          STATUS_DASHBOARD: ${{ needs.publish-dashboard.result }}
+          STATUS_GATEWAY: ${{ needs.publish-gateway.result }}
+          DECISION_BACKEND: ${{ needs.check-images.outputs.backend }}
+          DECISION_DASHBOARD: ${{ needs.check-images.outputs.dashboard }}
+          DECISION_GATEWAY: ${{ needs.check-images.outputs.gateway }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "::add-mask::$TELEGRAM_BOT_TOKEN"
+
+          status_emoji() {
+            case "$1" in
+              success) echo "✅" ;;
+              failure) echo "❌" ;;
+              cancelled) echo "⚠️" ;;
+              skipped) echo "➖" ;;
+              *) echo "❔" ;;
+            esac
+          }
+
+          owner_lc="${GITHUB_REPOSITORY_OWNER,,}"
+          run_url="https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          short_sha="$(printf '%s' "$GITHUB_SHA" | cut -c1-7)"
+          run_date_utc="$(date -u +'%Y-%m-%d %H:%M:%S UTC')"
+
+          ve="$(status_emoji "$STATUS_VALIDATE")"
+          ce="$(status_emoji "$STATUS_COMPOSE")"
+          oe="$(status_emoji "$STATUS_OPENCLAW")"
+          be="$(status_emoji "$STATUS_BACKEND")"
+          de="$(status_emoji "$STATUS_DASHBOARD")"
+          ge="$(status_emoji "$STATUS_GATEWAY")"
+
+          image_backend="ghcr.io/${owner_lc}/council-of-claws-backend"
+          image_dashboard="ghcr.io/${owner_lc}/council-of-claws-dashboard"
+          image_gateway="ghcr.io/${owner_lc}/council-of-claws-gateway"
+
+          msg="$(cat <<EOF
+          <b>📦 Council of Claws CI/CD</b>
+          ━━━━━━━━━━━━━━━━━━━━
+          🧾 <b>Workflow:</b> <code>${GITHUB_WORKFLOW}</code>
+          📦 <b>Repo:</b> <code>${GITHUB_REPOSITORY}</code>
+          🌿 <b>Ref:</b> <code>${GITHUB_REF_NAME}</code>
+          🔗 <b>Commit:</b> <code>${short_sha}</code>
+          🧮 <b>Run:</b> <code>${GITHUB_RUN_NUMBER}</code>
+          🕒 <b>Time:</b> <code>${run_date_utc}</code>
+          ━━━━━━━━━━━━━━━━━━━━
+          ${ve} <b>Validate:</b> ${STATUS_VALIDATE}
+          ${ce} <b>Compose Smoke:</b> ${STATUS_COMPOSE}
+          ${oe} <b>OpenClaw Smoke:</b> ${STATUS_OPENCLAW}
+          ━━━━━━━━━━━━━━━━━━━━
+          <b>Build Decisions</b>
+          - backend: <code>${DECISION_BACKEND}</code>
+          - dashboard: <code>${DECISION_DASHBOARD}</code>
+          - gateway: <code>${DECISION_GATEWAY}</code>
+          ━━━━━━━━━━━━━━━━━━━━
+          <b>Publish Results</b>
+          ${be} <b>Backend:</b> ${STATUS_BACKEND}
+          <code>${image_backend}</code>
+          ${de} <b>Dashboard:</b> ${STATUS_DASHBOARD}
+          <code>${image_dashboard}</code>
+          ${ge} <b>Gateway:</b> ${STATUS_GATEWAY}
+          <code>${image_gateway}</code>
+          ━━━━━━━━━━━━━━━━━━━━
+          <a href='${run_url}'>🔍 View Workflow Run</a>
+          EOF
+          )"
+
+          api="https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage"
+          jq -n \
+            --arg chat_id "${TELEGRAM_CHAT_ID}" \
+            --arg parse_mode "HTML" \
+            --arg text "$msg" \
+            '{
+              chat_id: $chat_id,
+              parse_mode: $parse_mode,
+              disable_web_page_preview: true,
+              text: $text
+            }' \
+            | curl -sf -X POST "$api" \
+                -H "Content-Type: application/json" \
+                -d @-

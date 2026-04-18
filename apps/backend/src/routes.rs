@@ -63,21 +63,21 @@ pub fn create_routes(state: AppState) -> Router {
     let cors = CorsLayer::new()
         .allow_methods([Method::GET, Method::POST])
         .allow_origin(Any);
-    
+
     Router::new()
         // Health endpoints
         .route("/api/health", get(health_handler))
         .route("/api/health/services", get(health_services_handler))
-        
+
         // Overview endpoints
         .route("/api/overview", get(overview_handler))
         .route("/api/overview/system", get(overview_system_handler))
-        
+
         // Agent endpoints
         .route("/api/agents", get(agents_list_handler))
         .route("/api/agents/{agent_id}", get(agents_detail_handler))
         .route("/api/agents/heartbeat", post(agent_heartbeat_handler))
-        
+
         // Task endpoints
         .route("/api/tasks", get(tasks_list_handler))
         .route("/api/tasks/{task_id}", get(tasks_detail_handler))
@@ -86,7 +86,7 @@ pub fn create_routes(state: AppState) -> Router {
         .route("/internal/tasks/create", post(task_create_handler))
         .route("/internal/missions", post(mission_create_handler))
         .route("/internal/missions/{mission_id}/close", post(mission_close_handler))
-        
+
         // Council endpoints
         .route("/api/council", get(council_list_handler))
         .route("/api/council/{council_id}", get(council_detail_handler))
@@ -97,21 +97,21 @@ pub fn create_routes(state: AppState) -> Router {
         // History endpoints
         .route("/api/history/missions", get(mission_history_handler))
         .route("/api/audit", get(audit_list_handler))
-        
+
         // Admin endpoints
         .route("/api/admin/rotate-secret", post(secret_rotate_handler))
-        
+
         // Usage endpoints
         .route("/api/usage", get(usage_summary_handler))
         .route("/api/usage/agents", get(usage_agents_handler))
         .route("/api/usage/models", get(usage_models_handler))
-        
+
         // Events endpoint
         .route("/api/events", get(events_handler))
 
         // Metrics endpoint
         .route("/api/metrics", get(metrics_handler))
-        
+
         // WebSocket stream
         .route("/ws", get(websocket_handler))
 
@@ -149,9 +149,9 @@ async fn council_propose_handler(
     Json(payload): Json<CouncilProposeRequest>,
 ) -> Result<Json<CouncilProposeResponse>, (StatusCode, Json<serde_json::Value>)> {
     let agent_id = enforce_agent_scope(&state, &headers, Some(|s| s.allow_council_propose)).await?;
-    
+
     let council_id = format!("council-{}", uuid::Uuid::new_v4());
-    
+
     sqlx::query(
         "INSERT INTO council_runs (id, title, status, phase, director_agent, created_at, updated_at)
          VALUES ($1, $2, 'active', 'debating', $3, NOW(), NOW())"
@@ -425,7 +425,7 @@ match result {
                 Some(&e),
                 None,
             ).await;
-            
+
             Err(internal_json_error(e))
         }
     }
@@ -489,7 +489,7 @@ async fn mission_create_handler(
                 Some(&e),
                 None,
             ).await;
-            
+
             Err(internal_json_error(e))
         }
     }
@@ -749,7 +749,7 @@ async fn agent_heartbeat_handler(
         .get("x-agent-id")
         .and_then(|h| h.to_str().ok())
         .unwrap_or_default();
-    
+
     if agent_id.is_empty() {
         return Err((
             StatusCode::BAD_REQUEST,
@@ -950,4 +950,3 @@ fn internal_json_error(err: String) -> (StatusCode, Json<serde_json::Value>) {
         })),
     )
 }
-

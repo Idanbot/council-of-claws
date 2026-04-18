@@ -103,7 +103,7 @@ impl ObsidianWriter {
             let completed = task.updated_at;
             let duration = completed.signed_duration_since(started);
             let duration_str = format!("{}h {}m", duration.num_hours(), duration.num_minutes() % 60);
-            
+
             // Use internal wiki link format for bidirectional support
             let wiki_link = format!("[[Tasks/{}]]", task.id);
 

@@ -87,13 +87,13 @@ async fn main() {
         .connect(&config.database_url)
         .await
         .expect("Failed to connect to PostgreSQL");
-    
+
     // Run migrations
     sqlx::migrate!("./migrations")
         .run(&pg_pool)
         .await
         .expect("Failed to run database migrations");
-    
+
     tracing::info!("PostgreSQL database connected and migrations applied");
 
     // Create domain readers

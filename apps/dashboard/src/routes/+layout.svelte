@@ -49,8 +49,8 @@
         <a
           href={item.href}
           class="group flex items-center rounded-xl px-4 py-3 text-xs font-black uppercase tracking-widest transition-all duration-300
-                 { $page.url.pathname === item.href 
-                   ? 'bg-white/10 text-white shadow-lg' 
+                 { $page.url.pathname === item.href
+                   ? 'bg-white/10 text-white shadow-lg'
                    : 'text-slate-500 hover:text-slate-200 hover:bg-white/5' }"
         >
           <span class="mr-4 h-1.5 w-1.5 rounded-full {item.dot} shadow-[0_0_8px_rgba(0,0,0,0.5)] group-hover:scale-150 transition-transform"></span>

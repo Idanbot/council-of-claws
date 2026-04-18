@@ -22,7 +22,7 @@
 
   onMount(fetchTasks);
 
-  $: sortedTasks = [...tasks].sort((a, b) => 
+  $: sortedTasks = [...tasks].sort((a, b) =>
     new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
   );
 </script>

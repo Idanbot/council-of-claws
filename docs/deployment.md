@@ -31,7 +31,31 @@ The platform is designed to support two distinct handoff modes:
    make preflight-deploy
    ```
 
-3. **Start the Stack:**
+3. **Choose Image Source:**
+   For remote GHCR deploys, set these in `.env` to the tags published by CI:
+   - `BACKEND_IMAGE`
+   - `DASHBOARD_IMAGE`
+   - `GATEWAY_IMAGE`
+
+   Example:
+   - `ghcr.io/<owner>/council-of-claws-backend:main`
+   - `ghcr.io/<owner>/council-of-claws-dashboard:main`
+   - `ghcr.io/<owner>/council-of-claws-gateway:main`
+
+   Then pull them explicitly:
+   ```bash
+   make compose-pull
+   ```
+
+   The workflow publishes to GHCR using the repository `GITHUB_TOKEN`. If the package visibility is private, the target machine must authenticate to GHCR before pulling.
+
+   Optional GitHub Actions notifications:
+   - `TELEGRAM_BOT_TOKEN` secret
+   - `TELEGRAM_CHAT_ID` secret
+
+   When both are configured, the workflow posts a Telegram summary covering checks, image build decisions, and image publish results.
+
+4. **Start the Stack:**
    Build and start the local stack on a fresh machine.
    ```bash
    make compose-up-build
@@ -47,7 +71,7 @@ The platform is designed to support two distinct handoff modes:
    make compose-up-build-tunnel
    ```
 
-4. **Verify:**
+5. **Verify:**
    Check the dashboard at `http://127.0.0.1:3000`.
    Open the OpenClaw Control UI from `http://127.0.0.1:3000/gateway` or print the raw tokenized URL with `make gateway-url`.
    Then run:
@@ -71,9 +95,10 @@ The repo source is separate from that runtime state. OpenClaw loads repo-managed
 1. Clone the repository.
 2. Copy your `.env` file.
 3. Run `make preflight-deploy`.
-4. Run `make compose-up-build`.
-
-This path gives you the latest committed code and a clean runtime state.
+4. Set `BACKEND_IMAGE`, `DASHBOARD_IMAGE`, and `GATEWAY_IMAGE` in `.env` to the GHCR tags you want to deploy.
+5. Run `make compose-pull`.
+6. Run `make compose-up`.
+This path gives you the latest published images and a clean runtime state.
 
 ## Resume Existing State
 
