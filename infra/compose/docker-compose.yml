@@ -1,0 +1,195 @@
+name: council-of-claws
+
+x-defaults: &defaults
+  restart: unless-stopped
+  networks:
+    - internal
+
+services:
+  redis:
+    <<: *defaults
+    image: redis:8-alpine
+    environment:
+      TZ: ${TIMEZONE:-UTC}
+    command:
+      [
+        "redis-server",
+        "--appendonly",
+        "yes",
+        "--appendfsync",
+        "everysec",
+        "--save",
+        "60",
+        "1000",
+        "--loglevel",
+        "warning"
+      ]
+    volumes:
+      - ../../data/redis:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+
+  postgres:
+    <<: *defaults
+    image: postgres:18-alpine
+    shm_size: "256m"
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-council}
+      POSTGRES_USER: ${POSTGRES_USER:-council}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-council-dev-password}
+      TZ: ${TIMEZONE:-UTC}
+      PGTZ: ${TIMEZONE:-UTC}
+    command:
+      - postgres
+      - -c
+      - shared_buffers=128MB
+      - -c
+      - max_connections=30
+      - -c
+      - work_mem=4MB
+    volumes:
+      - ../../data/postgres:/var/lib/postgresql/data
+      - ../../data/schema.sql:/docker-entrypoint-initdb.d/001_schema.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
+  backend:
+    <<: *defaults
+    user: "1000:1000"
+    build:
+      context: ../../apps/backend
+    image: ${BACKEND_IMAGE:-council/backend:local}
+    env_file:
+      - path: ../../.env
+        required: false
+    environment:
+      APP_PORT: 8080
+      REDIS_URL: redis://redis:6379/0
+      MOCK_MODE: ${MOCK_MODE:-false}
+      AGENT_TOKENS: ${AGENT_TOKENS:-}
+      TIMEZONE: ${TIMEZONE:-UTC}
+      TZ: ${TIMEZONE:-UTC}
+      DATABASE_URL: ${DATABASE_URL:-postgresql://${POSTGRES_USER:-council}:${POSTGRES_PASSWORD:-council-dev-password}@postgres:5432/${POSTGRES_DB:-council}}
+      OBSIDIAN_VAULT_PATH: /app/data/obsidian
+    depends_on:
+      redis:
+        condition: service_healthy
+        restart: true
+      postgres:
+        condition: service_healthy
+        restart: true
+    ports:
+      - "127.0.0.1:8080:8080"
+    expose:
+      - "8080"
+    volumes:
+      - ../../data/obsidian:/app/data/obsidian
+      - ../../data/workspace:/app/data/workspace
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8080/api/health >/dev/null 2>&1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
+  dashboard:
+    <<: *defaults
+    build:
+      context: ../../apps/dashboard
+    image: ${DASHBOARD_IMAGE:-council/dashboard:local}
+    env_file:
+      - path: ../../.env
+        required: false
+    environment:
+      DASHBOARD_PORT: 3000
+      INTERNAL_API_BASE_URL: http://backend:8080
+      OPENCLAW_GATEWAY_TOKEN: ${OPENCLAW_GATEWAY_TOKEN:-council-local-gateway-token}
+      GATEWAY_PORT: ${GATEWAY_PORT:-18789}
+      TIMEZONE: ${TIMEZONE:-UTC}
+      TZ: ${TIMEZONE:-UTC}
+    depends_on:
+      backend:
+        condition: service_healthy
+        restart: true
+    ports:
+      - "127.0.0.1:${DASHBOARD_PORT:-3000}:3000"
+
+  gateway:
+    <<: *defaults
+    image: ${OPENCLAW_IMAGE:-ghcr.io/openclaw/openclaw@sha256:9d5f1dfbd5deedc37706c78f745b958ffbe9b4f20840cfb4d49c617a50326902}
+    command:
+      [
+        "sh",
+        "-c",
+        "mkdir -p /home/node/.openclaw/config && cp /bootstrap-config/openclaw.json5 /home/node/.openclaw/config/openclaw.json5 && exec openclaw gateway run"
+      ]
+    env_file:
+      - path: ../../.env
+        required: false
+    environment:
+      REDIS_URL: redis://redis:6379/0
+      OBSIDIAN_PATH: /obsidian
+      WORKSPACE_PATH: /workspace
+      AGENT_TOKENS: ${AGENT_TOKENS:-}
+      TIMEZONE: ${TIMEZONE:-UTC}
+      TZ: ${TIMEZONE:-UTC}
+      OPENCLAW_CONFIG_PATH: /home/node/.openclaw/config/openclaw.json5
+      OPENCLAW_GATEWAY_TOKEN: ${OPENCLAW_GATEWAY_TOKEN:-council-local-gateway-token}
+      DATABASE_URL: ${OPENCLAW_DATABASE_URL:-postgresql://${POSTGRES_USER:-council}:${POSTGRES_PASSWORD:-council-dev-password}@postgres:5432/${POSTGRES_DB:-council}}
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+      GEMINI_API_KEY: ${GEMINI_API_KEY}
+      GROQ_API_KEY: ${GROQ_API_KEY}
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
+      TELEGRAM_ALLOWED_USER_IDS: ${TELEGRAM_ALLOWED_USER_IDS}
+    volumes:
+      - ../../data/openclaw:/home/node/.openclaw
+      - ../../data/workspace:/workspace
+      - ../../data/obsidian:/obsidian
+      - ../../apps:/repo/apps:ro
+      - ../../docs:/repo/docs:ro
+      - ../../infra:/repo/infra:ro
+      - ../../scripts:/repo/scripts:ro
+      - ../../.agents:/repo/.agents:ro
+      - ../../.github:/repo/.github:ro
+      - ../../README.md:/repo/README.md:ro
+      - ../../Makefile:/repo/Makefile:ro
+      - ../../LICENSE:/repo/LICENSE:ro
+      - ../../.env.example:/repo/.env.example:ro
+      - ../../.gitignore:/repo/.gitignore:ro
+      - ../../apps/gateway/config:/bootstrap-config:ro
+    depends_on:
+      redis:
+        condition: service_healthy
+        restart: true
+      postgres:
+        condition: service_healthy
+        restart: true
+    ports:
+      - "127.0.0.1:${GATEWAY_PORT:-18789}:18789"
+    expose:
+      - "18789"
+
+  cloudflared:
+    <<: *defaults
+    image: cloudflare/cloudflared:latest
+    profiles: ["tunnel"]
+    environment:
+      TZ: ${TIMEZONE:-UTC}
+    command: tunnel --no-autoupdate run --token ${CLOUDFLARED_TOKEN:-}
+    depends_on:
+      dashboard:
+        condition: service_started
+        restart: true
+
+networks:
+  internal:
+    driver: bridge

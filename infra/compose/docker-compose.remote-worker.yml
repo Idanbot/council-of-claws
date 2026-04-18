@@ -1,0 +1,19 @@
+services:
+  worker:
+    image: ${REMOTE_WORKER_IMAGE:-alpine:3.20}
+    profiles: ["remote-worker"]
+    # Placeholder only. This profile is intentionally not part of the v1 path yet.
+    command: ["sh", "-lc", "sleep infinity"]
+    restart: unless-stopped
+    environment:
+      REDIS_URL: redis://redis:6379
+      DATABASE_URL: postgresql://${POSTGRES_USER:-council}:${POSTGRES_PASSWORD:-council-dev-password}@postgres:5432/${POSTGRES_DB:-council}
+      TIMEZONE: ${TIMEZONE:-UTC}
+      TZ: ${TIMEZONE:-UTC}
+    depends_on:
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    networks:
+      - internal

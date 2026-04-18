@@ -1,0 +1,72 @@
+{
+  gateway: {
+    mode: "local",
+    auth: {
+      mode: "token",
+      token: "${OPENCLAW_GATEWAY_TOKEN}",
+    },
+    controlUi: {
+      allowedOrigins: [
+        "http://localhost:18789",
+        "http://127.0.0.1:18789",
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+      ],
+    },
+  },
+  skills: {
+    load: {
+      extraDirs: ["/repo/.agents/skills"],
+      watch: true,
+    },
+  },
+  agents: {
+    defaults: {
+      workspace: "/workspace",
+      repoRoot: "/repo",
+      userTimezone: "${TIMEZONE}",
+    },
+    list: [
+      {
+        id: "contractor",
+        default: true,
+        workspace: "/workspace",
+        skills: ["coc-tool", "repo-readonly", "backend-audit", "obsidian-memory"],
+        subagents: {
+          allowAgents: ["director"],
+        },
+      },
+      {
+        id: "director",
+        workspace: "/workspace",
+        skills: ["coc-tool", "repo-readonly", "backend-audit", "obsidian-memory"],
+        subagents: {
+          allowAgents: ["architect", "senior-engineer", "junior-engineer", "intern"],
+        },
+      },
+      {
+        id: "architect",
+        workspace: "/workspace",
+        skills: ["repo-readonly", "backend-audit", "obsidian-memory"],
+        subagents: {
+          allowAgents: ["director", "senior-engineer", "junior-engineer"],
+        },
+      },
+      {
+        id: "senior-engineer",
+        workspace: "/workspace",
+        skills: ["coc-tool", "repo-readonly", "backend-audit", "obsidian-memory"],
+      },
+      {
+        id: "junior-engineer",
+        workspace: "/workspace",
+        skills: ["repo-readonly", "backend-audit", "obsidian-memory"],
+      },
+      {
+        id: "intern",
+        workspace: "/workspace",
+        skills: ["backend-audit", "obsidian-memory"],
+      },
+    ],
+  },
+}

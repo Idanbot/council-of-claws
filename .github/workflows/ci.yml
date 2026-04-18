@@ -1,0 +1,89 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+      - dev
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+          cache-dependency-glob: |
+            .pre-commit-config.yaml
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Run pre-commit
+        run: uvx pre-commit run --all-files
+
+      - name: Run gateway config smoke test
+        run: bash scripts/smoke/gateway-config-smoke.sh
+
+  compose-smoke:
+    runs-on: ubuntu-latest
+    needs: validate
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Create .env from example
+        run: cp .env.example .env
+
+      - name: Validate compose config
+        run: CLOUDFLARED_TOKEN=ci-token docker compose -f infra/compose/docker-compose.yml config -q
+
+      - name: Run compose smoke test
+        run: bash scripts/smoke/compose-smoke.sh
+
+  openclaw-smoke:
+    runs-on: ubuntu-latest
+    needs: compose-smoke
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Create .env from example
+        run: cp .env.example .env
+
+      - name: Run OpenClaw runtime smoke test
+        run: bash scripts/smoke/openclaw-runtime-smoke.sh
+
+  container-build:
+    runs-on: ubuntu-latest
+    needs: openclaw-smoke
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Build backend image when Dockerfile exists
+        run: |
+          if [ -f apps/backend/Dockerfile ]; then
+            docker build -t council/backend:ci apps/backend
+          else
+            echo "Skipping backend build; apps/backend/Dockerfile not found"
+          fi
+
+      - name: Build dashboard image when Dockerfile exists
+        run: |
+          if [ -f apps/dashboard/Dockerfile ]; then
+            docker build -t council/dashboard:ci apps/dashboard
+          else
+            echo "Skipping dashboard build; apps/dashboard/Dockerfile not found"
+          fi

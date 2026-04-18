@@ -1,0 +1,31 @@
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-json
+      - id: check-merge-conflict
+      - id: detect-private-key
+
+  - repo: local
+    hooks:
+      - id: compose-config
+        name: Compose config validation
+        entry: bash -lc 'CLOUDFLARED_TOKEN=${CLOUDFLARED_TOKEN:-precommit-token} docker compose -f infra/compose/docker-compose.yml config -q'
+        language: system
+        pass_filenames: false
+
+      - id: compose-smoke
+        name: Compose smoke test
+        entry: bash -lc 'bash scripts/smoke/compose-smoke.sh'
+        language: system
+        pass_filenames: false
+        stages: [pre-push]
+
+      - id: gateway-config-smoke
+        name: Gateway config smoke test
+        entry: bash -lc 'bash scripts/smoke/gateway-config-smoke.sh'
+        language: system
+        pass_filenames: false

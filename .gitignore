@@ -137,3 +137,43 @@ dist
 # Vite logs files
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
+
+# Python / pre-commit
+__pycache__/
+*.py[cod]
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+.venv/
+venv/
+
+# Rust
+target/
+Cargo.lock
+
+# Databases and runtime data
+*.db
+*.rdb
+
+# Local data mounts (keep .gitkeep only)
+data/**
+!data/.gitkeep
+!data/**/.gitkeep
+
+# Compose and local overrides
+docker-compose.override.yml
+compose.override.yml
+
+# Local secrets/config
+*.secret
+*.secrets
+
+# Editors / OS
+.idea/
+.DS_Store
+
+# Temporary files
+tmp/
+.tmp/
+*.tmp
+*.swp

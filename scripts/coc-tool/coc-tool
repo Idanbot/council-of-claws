@@ -1,0 +1,146 @@
+#!/usr/bin/env python3
+from __future__ import annotations
+
+import json
+import os
+import sys
+import urllib.error
+import urllib.request
+from pathlib import Path
+
+
+def usage() -> None:
+    print(
+        """Usage:
+  coc-tool health
+  coc-tool mission-create --title TITLE --description DESCRIPTION
+  coc-tool task-create --title TITLE --description DESCRIPTION --priority PRIORITY --target-agent AGENT [--mission-id MISSION]
+  coc-tool mission-close --mission-id MISSION [--notes NOTES]
+
+Required environment:
+  COC_BACKEND_BASE_URL   Backend base URL, e.g. http://backend:8080
+  COC_AGENT_ID           Agent identity, e.g. director
+  COC_AGENT_TOKEN        Bearer token for that agent
+""",
+        file=sys.stderr,
+    )
+
+
+def parse_args(argv: list[str]) -> tuple[str, dict[str, str]]:
+    if not argv:
+        return "help", {}
+
+    command = argv[0]
+    options: dict[str, str] = {}
+    i = 1
+    while i < len(argv):
+        arg = argv[i]
+        if arg.startswith("--"):
+            key = arg[2:].replace("-", "_")
+            if i + 1 >= len(argv):
+                raise SystemExit(f"Missing value for {arg}")
+            options[key] = argv[i + 1]
+            i += 2
+        elif arg in {"-h", "--help", "help"}:
+            return "help", {}
+        else:
+            raise SystemExit(f"Unknown argument: {arg}")
+    return command, options
+
+
+def resolve_token() -> str:
+    token = os.environ.get("COC_AGENT_TOKEN", "")
+    token_file = os.environ.get("COC_AGENT_TOKEN_FILE", "")
+    if not token and token_file:
+        token = Path(token_file).read_text(encoding="utf-8").strip()
+    if not token:
+        raise SystemExit("COC_AGENT_TOKEN or COC_AGENT_TOKEN_FILE is required")
+    return token
+
+
+def request(method: str, path: str, body: dict | None = None) -> str:
+    backend_base_url = os.environ.get("COC_BACKEND_BASE_URL", "http://backend:8080").rstrip("/")
+    agent_id = os.environ.get("COC_AGENT_ID", "").strip()
+    if not agent_id:
+        raise SystemExit("COC_AGENT_ID is required")
+    token = resolve_token()
+
+    headers = {
+        "X-Agent-Id": agent_id,
+        "Authorization": f"Bearer {token}",
+    }
+    data: bytes | None = None
+    if body is not None:
+        headers["Content-Type"] = "application/json"
+        data = json.dumps(body).encode("utf-8")
+
+    req = urllib.request.Request(
+        f"{backend_base_url}{path}",
+        data=data,
+        headers=headers,
+        method=method,
+    )
+
+    try:
+        with urllib.request.urlopen(req, timeout=20) as resp:
+            return resp.read().decode("utf-8")
+    except urllib.error.HTTPError as exc:
+        return exc.read().decode("utf-8", errors="replace")
+    except urllib.error.URLError as exc:
+        raise SystemExit(f"request failed: {exc.reason}") from exc
+
+
+def main(argv: list[str]) -> int:
+    command, options = parse_args(argv)
+
+    if command in {"help", "-h", "--help", ""}:
+        usage()
+        return 0
+
+    if command == "health":
+        print(request("GET", "/api/health"))
+        return 0
+
+    if command == "mission-create":
+        title = options.get("title", "")
+        description = options.get("description", "")
+        if not title or not description:
+            raise SystemExit("--title and --description are required")
+        print(request("POST", "/internal/missions", {"title": title, "description": description}))
+        return 0
+
+    if command == "task-create":
+        title = options.get("title", "")
+        description = options.get("description", "")
+        priority = options.get("priority", "normal")
+        target_agent = options.get("target_agent", "")
+        mission_id = options.get("mission_id", "")
+        if not title or not description or not target_agent:
+            raise SystemExit("--title, --description, and --target-agent are required")
+        payload: dict[str, object] = {
+            "title": title,
+            "description": description,
+            "priority": priority,
+            "target_agent_id": target_agent,
+        }
+        if mission_id:
+            payload["mission_id"] = mission_id
+        print(request("POST", "/internal/tasks/create", payload))
+        return 0
+
+    if command == "mission-close":
+        mission_id = options.get("mission_id", "")
+        notes = options.get("notes", "")
+        if not mission_id:
+            raise SystemExit("--mission-id is required")
+        payload: dict[str, object] = {}
+        if notes:
+            payload["notes"] = notes
+        print(request("POST", f"/internal/missions/{mission_id}/close", payload))
+        return 0
+
+    raise SystemExit(f"Unknown command: {command}")
+
+
+if __name__ == "__main__":
+    raise SystemExit(main(sys.argv[1:]))
