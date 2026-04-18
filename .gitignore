@@ -150,6 +150,7 @@ venv/
 # Rust
 target/
 Cargo.lock
+!apps/backend/Cargo.lock
 
 # Databases and runtime data
 *.db
