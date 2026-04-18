@@ -114,18 +114,6 @@ CREATE TABLE IF NOT EXISTS audit_events (
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- Essential Real Agent Definitions (No hashes yet, using legacy fallback for smoke tests)
-INSERT INTO agents (id, display_name, role, secret_hash) VALUES
-('director', 'Director Agent', 'director', NULL),
-('contractor', 'Contractor Agent', 'contractor', NULL),
-('architect', 'Architect Agent', 'architect', NULL),
-('senior-engineer', 'Senior Engineer Agent', 'senior-engineer', NULL),
-('junior-engineer', 'Junior Engineer Agent', 'junior-engineer', NULL),
-('intern', 'Intern Agent', 'intern', NULL)
-ON CONFLICT (id) DO UPDATE SET
-    display_name = EXCLUDED.display_name,
-    role = EXCLUDED.role;
-
 -- Batch 5: Council Votes and Fine-Grained RBAC
 
 -- 1. Create council_votes table
@@ -141,11 +129,6 @@ CREATE TABLE IF NOT EXISTS council_votes (
 -- 2. Update agents table to ensure scope_profile is used
 -- (Column already exists but we ensure it's JSONB for granular control)
 ALTER TABLE agents ALTER COLUMN scope_profile TYPE JSONB USING scope_profile::JSONB;
-
--- 3. Seed some default scope profiles for existing agents
-UPDATE agents SET scope_profile = '{"allow_task_create": true, "allow_mission_close": true, "allow_council_finalize": true}' WHERE id = 'director';
-UPDATE agents SET scope_profile = '{"allow_task_create": true, "allow_council_propose": true}' WHERE id IN ('architect', 'senior-engineer');
-UPDATE agents SET scope_profile = '{"allow_task_claim": true}' WHERE id IN ('junior-engineer', 'intern');
 
 -- Clean Real Schema (No Seeds)
 -- This ensures zero tokens and zero tasks on fresh start
