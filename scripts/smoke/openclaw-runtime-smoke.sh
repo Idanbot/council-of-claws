@@ -4,6 +4,8 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$ROOT_DIR"
 
+bash scripts/dev/prepare-data-dirs.sh
+
 COMPOSE_FILE="infra/compose/docker-compose.yml"
 TOKEN="${OPENCLAW_GATEWAY_TOKEN:-council-local-gateway-token}"
 CONFIG_COPY="data/openclaw/config/openclaw.json5"

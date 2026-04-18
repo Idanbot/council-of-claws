@@ -88,15 +88,19 @@ compose-config: ## Validate docker-compose config
 	$(COMPOSE_WITH_ENV) config -q && echo compose-ok
 
 compose-up: ## Start full stack (without build)
+	bash "$(PROJECT_ROOT)/scripts/dev/prepare-data-dirs.sh"
 	$(COMPOSE_WITH_ENV) up -d
 
 compose-up-build: ## Build and start full stack
+	bash "$(PROJECT_ROOT)/scripts/dev/prepare-data-dirs.sh"
 	$(COMPOSE_WITH_ENV) up -d --build
 
 compose-up-tunnel: ## Start full stack with optional cloudflared tunnel profile
+	bash "$(PROJECT_ROOT)/scripts/dev/prepare-data-dirs.sh"
 	$(COMPOSE_WITH_ENV) --profile tunnel up -d
 
 compose-up-build-tunnel: ## Build and start full stack with optional cloudflared tunnel profile
+	bash "$(PROJECT_ROOT)/scripts/dev/prepare-data-dirs.sh"
 	$(COMPOSE_WITH_ENV) --profile tunnel up -d --build
 
 compose-down: ## Stop full stack
