@@ -24,17 +24,17 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v6.0.2
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v7
+        uses: astral-sh/setup-uv@v7.1.6
         with:
           enable-cache: true
           cache-dependency-glob: |
             .pre-commit-config.yaml
 
       - name: Setup Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@v6.2.0
         with:
           python-version: "3.12"
 
@@ -49,7 +49,7 @@ jobs:
     needs: validate
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v6.0.2
 
       - name: Create .env from example
         run: cp .env.example .env
@@ -65,10 +65,13 @@ jobs:
     needs: compose-smoke
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v6.0.2
 
       - name: Create .env from example
         run: cp .env.example .env
+
+      - name: Prepare container-writable data dirs
+        run: bash scripts/dev/prepare-data-dirs.sh
 
       - name: Run OpenClaw runtime smoke test
         run: bash scripts/smoke/openclaw-runtime-smoke.sh
@@ -78,25 +81,71 @@ jobs:
     permissions:
       contents: read
       packages: read
+      pull-requests: read
     outputs:
       backend: ${{ steps.decide.outputs.backend }}
       dashboard: ${{ steps.decide.outputs.dashboard }}
       gateway: ${{ steps.decide.outputs.gateway }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v6.0.2
 
-      - name: Filter paths for image rebuild
+      - name: Detect image-relevant path changes
         id: filter
-        uses: dorny/paths-filter@v3
-        with:
-          filters: |
-            backend:
-              - "apps/backend/**"
-            dashboard:
-              - "apps/dashboard/**"
-            gateway:
-              - "apps/gateway/**"
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          EVENT_NAME: ${{ github.event_name }}
+          REPOSITORY: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          BEFORE_SHA: ${{ github.event.before }}
+          HEAD_SHA: ${{ github.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          tmp_file="$(mktemp)"
+          trap 'rm -f "$tmp_file"' EXIT
+
+          api_get() {
+            local url="$1"
+            curl -fsSL \
+              -H "Authorization: Bearer ${GITHUB_TOKEN}" \
+              -H "Accept: application/vnd.github+json" \
+              "$url"
+          }
+
+          if [[ "${EVENT_NAME}" == "pull_request" ]]; then
+            page=1
+            while :; do
+              response="$(api_get "https://api.github.com/repos/${REPOSITORY}/pulls/${PR_NUMBER}/files?per_page=100&page=${page}")"
+              count="$(jq 'length' <<<"${response}")"
+              if [[ "${count}" == "0" ]]; then
+                break
+              fi
+              jq -r '.[].filename' <<<"${response}" >> "$tmp_file"
+              page=$((page + 1))
+            done
+          elif [[ -n "${BEFORE_SHA}" && "${BEFORE_SHA}" != "0000000000000000000000000000000000000000" ]]; then
+            api_get "https://api.github.com/repos/${REPOSITORY}/compare/${BEFORE_SHA}...${HEAD_SHA}" \
+              | jq -r '.files[]?.filename' >> "$tmp_file"
+          else
+            git ls-files >> "$tmp_file"
+          fi
+
+          sort -u -o "$tmp_file" "$tmp_file"
+
+          has_match() {
+            local prefix="$1"
+            if grep -Eq "^${prefix}" "$tmp_file"; then
+              printf 'true\n'
+            else
+              printf 'false\n'
+            fi
+          }
+
+          echo "backend=$(has_match 'apps/backend/')" >> "$GITHUB_OUTPUT"
+          echo "dashboard=$(has_match 'apps/dashboard/')" >> "$GITHUB_OUTPUT"
+          echo "gateway=$(has_match 'apps/gateway/')" >> "$GITHUB_OUTPUT"
 
       - name: Lowercase the owner name
         run: |
@@ -104,7 +153,7 @@ jobs:
 
       - name: Log in to registry ${{ env.REGISTRY }}
         if: github.event_name != 'pull_request'
-        uses: docker/login-action@v3
+        uses: docker/login-action@v3.6.0
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
@@ -165,18 +214,18 @@ jobs:
       packages: write
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v6.0.2
 
       - name: Lowercase the owner name
         run: |
           echo "OWNER_LC=${GITHUB_REPOSITORY_OWNER,,}" >> "${GITHUB_ENV}"
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v3.12.0
 
       - name: Log in to registry ${{ env.REGISTRY }}
         if: github.event_name != 'pull_request'
-        uses: docker/login-action@v3
+        uses: docker/login-action@v3.6.0
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
@@ -184,7 +233,7 @@ jobs:
 
       - name: Extract Docker metadata
         id: meta
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@v5.10.0
         with:
           images: ${{ env.REGISTRY }}/${{ env.OWNER_LC }}/council-of-claws-backend
           tags: |
@@ -194,7 +243,7 @@ jobs:
             type=sha,prefix=sha-
 
       - name: Build and push backend image
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v6.18.0
         with:
           context: ./apps/backend
           file: ./apps/backend/Dockerfile
@@ -211,18 +260,18 @@ jobs:
       packages: write
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v6.0.2
 
       - name: Lowercase the owner name
         run: |
           echo "OWNER_LC=${GITHUB_REPOSITORY_OWNER,,}" >> "${GITHUB_ENV}"
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v3.12.0
 
       - name: Log in to registry ${{ env.REGISTRY }}
         if: github.event_name != 'pull_request'
-        uses: docker/login-action@v3
+        uses: docker/login-action@v3.6.0
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
@@ -230,7 +279,7 @@ jobs:
 
       - name: Extract Docker metadata
         id: meta
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@v5.10.0
         with:
           images: ${{ env.REGISTRY }}/${{ env.OWNER_LC }}/council-of-claws-dashboard
           tags: |
@@ -240,7 +289,7 @@ jobs:
             type=sha,prefix=sha-
 
       - name: Build and push dashboard image
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v6.18.0
         with:
           context: ./apps/dashboard
           file: ./apps/dashboard/Dockerfile
@@ -257,18 +306,18 @@ jobs:
       packages: write
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v6.0.2
 
       - name: Lowercase the owner name
         run: |
           echo "OWNER_LC=${GITHUB_REPOSITORY_OWNER,,}" >> "${GITHUB_ENV}"
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v3.12.0
 
       - name: Log in to registry ${{ env.REGISTRY }}
         if: github.event_name != 'pull_request'
-        uses: docker/login-action@v3
+        uses: docker/login-action@v3.6.0
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
@@ -276,7 +325,7 @@ jobs:
 
       - name: Extract Docker metadata
         id: meta
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@v5.10.0
         with:
           images: ${{ env.REGISTRY }}/${{ env.OWNER_LC }}/council-of-claws-gateway
           tags: |
@@ -286,7 +335,7 @@ jobs:
             type=sha,prefix=sha-
 
       - name: Build and push gateway image
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v6.18.0
         with:
           context: ./apps/gateway
           file: ./apps/gateway/Dockerfile
