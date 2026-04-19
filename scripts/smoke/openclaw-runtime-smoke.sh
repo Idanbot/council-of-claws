@@ -8,7 +8,7 @@ bash scripts/dev/prepare-data-dirs.sh
 
 COMPOSE_FILE="infra/compose/docker-compose.yml"
 TOKEN="${OPENCLAW_GATEWAY_TOKEN:-council-local-gateway-token}"
-CONFIG_COPY="data/openclaw/config/openclaw.json5"
+RUNTIME_CONFIG_PATH="/home/node/.openclaw/config/openclaw.json5"
 
 docker compose --env-file .env -f "$COMPOSE_FILE" up -d redis postgres gateway
 
@@ -28,13 +28,13 @@ until curl -fsS "http://127.0.0.1:18789/?token=$TOKEN" >/dev/null 2>&1; do
   sleep 2
 done
 
-if [[ ! -f "$CONFIG_COPY" ]]; then
-  echo "Expected copied runtime config not found at $CONFIG_COPY"
+if ! docker compose --env-file .env -f "$COMPOSE_FILE" exec -T gateway sh -lc "test -f '$RUNTIME_CONFIG_PATH'"; then
+  echo "Expected runtime config not found at $RUNTIME_CONFIG_PATH inside gateway container"
   exit 1
 fi
 
 for agent_id in contractor director architect senior-engineer junior-engineer intern; do
-  if ! grep -Eq "\"id\": \"$agent_id\"|id: \"$agent_id\"" "$CONFIG_COPY"; then
+  if ! docker compose --env-file .env -f "$COMPOSE_FILE" exec -T gateway sh -lc "grep -Eq '\"id\": \"$agent_id\"|id: \"$agent_id\"' '$RUNTIME_CONFIG_PATH'"; then
     echo "Runtime config missing agent '$agent_id'"
     exit 1
   fi
