@@ -3,7 +3,9 @@ repos:
     rev: v5.0.0
     hooks:
       - id: trailing-whitespace
+        exclude: ^apps/dashboard/build/
       - id: end-of-file-fixer
+        exclude: ^apps/dashboard/build/
       - id: check-yaml
       - id: check-json
       - id: check-merge-conflict
