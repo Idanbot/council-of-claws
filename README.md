@@ -1,5 +1,14 @@
 # Council of Claws
 
+[![CI/CD](https://github.com/Idanbot/council-of-claws/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Idanbot/council-of-claws/actions/workflows/ci.yml)
+[![GHCR Images](https://img.shields.io/badge/ghcr-council--of--claws-2496ED.svg?logo=docker&logoColor=white)](https://github.com/users/Idanbot/packages?repo_name=council-of-claws)
+[![Rust 1.89](https://img.shields.io/badge/rust-1.89-D34516.svg?logo=rust&logoColor=white)](https://www.rust-lang.org/)
+[![Node 24](https://img.shields.io/badge/node-24-5FA04E.svg?logo=node.js&logoColor=white)](https://nodejs.org/)
+[![OpenClaw 2026.4.15](https://img.shields.io/badge/openclaw-2026.4.15-0F766E.svg)](https://github.com/openclaw/openclaw)
+[![PostgreSQL 18](https://img.shields.io/badge/postgres-18-4169E1.svg?logo=postgresql&logoColor=white)](https://www.postgresql.org/)
+[![Redis 8](https://img.shields.io/badge/redis-8-DC382D.svg?logo=redis&logoColor=white)](https://redis.io/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-22C55E.svg)](LICENSE)
+
 Real-time orchestration and observability for a multi-agent system powered by OpenClaw and a Rust control backend.
 
 The Council of Claws is an autonomous platform powered by **OpenClaw** and a high-performance **Rust backend**. It manages complex multi-agent missions, provides real-time glassmorphic observability, and maintains a durable "Narrative Memory" in Obsidian.
