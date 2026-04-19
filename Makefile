@@ -14,8 +14,14 @@ COMPOSE_WITH_ENV := docker compose --env-file $(ENV_FILE) -f $(COMPOSE_FILE)
 .PHONY: help setup setup-env deps install dashboard-install backend-fetch \
 	check check-all lint format format-check ci \
 	backend-check backend-test backend-fmt backend-fmt-check backend-clippy backend-run \
-	dashboard-check dashboard-build dashboard-dev \
+	dashboard-check dashboard-test dashboard-build dashboard-dev \
 	compose-config compose-up compose-up-build compose-up-tunnel compose-up-build-tunnel compose-down compose-restart compose-ps compose-logs compose-pull gateway-url \
+	relaunch relaunch-tunnel \
+	devices-list devices-approve-latest devices-approve \
+	models-status models-list copilot-login \
+	generate-secrets generate-secrets-apply \
+	deploy-notification-on deploy-notification-off post-start-notify \
+	launch launch-tunnel \
 	remote-worker-up remote-worker-down \
 	smoke smoke-compose smoke-gateway smoke-openclaw smoke-timezone smoke-internal-api smoke-agent-backend \
 	preflight preflight-deploy post-start-verify \
@@ -78,6 +84,9 @@ backend-run: ## Run backend service locally
 dashboard-check: ## Run dashboard type/svelte checks
 	npm --prefix "$(DASHBOARD_DIR)" run check
 
+dashboard-test: ## Run dashboard component tests
+	npm --prefix "$(DASHBOARD_DIR)" run test:run
+
 dashboard-build: ## Build dashboard production bundle
 	npm --prefix "$(DASHBOARD_DIR)" run build
 
@@ -103,6 +112,20 @@ compose-up-build-tunnel: ## Build and start full stack with optional cloudflared
 	bash "$(PROJECT_ROOT)/scripts/dev/prepare-data-dirs.sh"
 	$(COMPOSE_WITH_ENV) --profile tunnel up -d --build
 
+relaunch: ## Serial full restart (down -> build up -> verify -> optional notify)
+	bash "$(PROJECT_ROOT)/scripts/dev/prepare-data-dirs.sh"
+	$(COMPOSE_WITH_ENV) down
+	$(COMPOSE_WITH_ENV) up -d --build
+	bash "$(PROJECT_ROOT)/scripts/dev/post-start-verify.sh"
+	bash "$(PROJECT_ROOT)/scripts/dev/post-start-notify.sh"
+
+relaunch-tunnel: ## Serial full restart with tunnel profile (down -> build up -> verify -> optional notify)
+	bash "$(PROJECT_ROOT)/scripts/dev/prepare-data-dirs.sh"
+	$(COMPOSE_WITH_ENV) --profile tunnel down
+	$(COMPOSE_WITH_ENV) --profile tunnel up -d --build
+	bash "$(PROJECT_ROOT)/scripts/dev/post-start-verify.sh"
+	bash "$(PROJECT_ROOT)/scripts/dev/post-start-notify.sh"
+
 compose-down: ## Stop full stack
 	$(COMPOSE_WITH_ENV) down
 
@@ -123,14 +146,68 @@ gateway-url: ## Print the tokenized OpenClaw Control UI URL
 	token="$$(grep -E '^OPENCLAW_GATEWAY_TOKEN=' "$(ENV_FILE)" | tail -n1 | cut -d= -f2-)"; \
 	echo "http://127.0.0.1:$${port:-18789}/?token=$${token:-council-local-gateway-token}"
 
+generate-secrets: ## Print fresh OPENCLAW_GATEWAY_TOKEN and AGENT_TOKENS values without modifying .env
+	@bash "$(PROJECT_ROOT)/scripts/dev/generate-secrets.sh"
+
+generate-secrets-apply: ## Generate fresh OPENCLAW_GATEWAY_TOKEN and AGENT_TOKENS values, write them into .env, and print them
+	@bash "$(PROJECT_ROOT)/scripts/dev/generate-secrets.sh" --apply
+
+devices-list: ## List pending and paired OpenClaw device entries
+	$(COMPOSE_WITH_ENV) exec gateway sh -lc 'openclaw devices list'
+
+devices-approve-latest: ## Approve the newest pending OpenClaw device pairing request
+	$(COMPOSE_WITH_ENV) exec gateway sh -lc 'openclaw devices approve'
+
+devices-approve: ## Approve a specific OpenClaw device pairing request (make devices-approve REQUEST_ID=<id>)
+	@if [[ -z "$(REQUEST_ID)" ]]; then \
+		echo "Usage: make devices-approve REQUEST_ID=<request-id>"; \
+		exit 1; \
+	fi
+	$(COMPOSE_WITH_ENV) exec gateway sh -lc 'openclaw devices approve "$(REQUEST_ID)"'
+
+models-status: ## Show the resolved OpenClaw model/auth status (optional: make models-status AGENT=<id>)
+	@cmd='openclaw models status'; \
+	if [[ -n "$(AGENT)" ]]; then \
+		cmd="$$cmd --agent $(AGENT)"; \
+	fi; \
+	$(COMPOSE_WITH_ENV) exec gateway sh -lc "$$cmd"
+
+models-list: ## List configured OpenClaw models (optional: make models-list PROVIDER=<name>)
+	@cmd='openclaw models list'; \
+	if [[ -n "$(PROVIDER)" ]]; then \
+		cmd="$$cmd --provider $(PROVIDER)"; \
+	fi; \
+	$(COMPOSE_WITH_ENV) exec gateway sh -lc "$$cmd"
+
+copilot-login: ## Run interactive GitHub Copilot device login inside the gateway container
+	$(COMPOSE_WITH_ENV) exec gateway sh -lc 'openclaw models auth login-github-copilot'
+
 preflight: ## Verify local prerequisites and ports before starting the stack
 	bash "$(PROJECT_ROOT)/scripts/dev/preflight.sh"
+
+launch: setup preflight compose-up-build post-start-verify post-start-notify ## Bootstrap deps, build the stack, verify it, and optionally send a deploy notification
+
+launch-tunnel: setup ## Bootstrap deps, build the stack with the tunnel profile, verify it, and optionally send a deploy notification
+	bash "$(PROJECT_ROOT)/scripts/dev/preflight.sh" --tunnel
+	bash "$(PROJECT_ROOT)/scripts/dev/prepare-data-dirs.sh"
+	$(COMPOSE_WITH_ENV) --profile tunnel up -d --build
+	bash "$(PROJECT_ROOT)/scripts/dev/post-start-verify.sh"
+	bash "$(PROJECT_ROOT)/scripts/dev/post-start-notify.sh"
 
 preflight-deploy: ## Verify deploy-time prerequisites and fail on placeholder secrets
 	bash "$(PROJECT_ROOT)/scripts/dev/preflight.sh" --deploy
 
 post-start-verify: ## Verify dashboard, backend, OpenClaw, and authenticated coc-tool health after startup
 	bash "$(PROJECT_ROOT)/scripts/dev/post-start-verify.sh"
+
+post-start-notify: ## Optionally send a Telegram 'stack deployed' notification after services are ready
+	bash "$(PROJECT_ROOT)/scripts/dev/post-start-notify.sh"
+
+deploy-notification-on: ## Enable local Telegram deploy notifications in .env
+	bash "$(PROJECT_ROOT)/scripts/dev/set-env-value.sh" DEPLOY_NOTIFICATION_ENABLED true
+
+deploy-notification-off: ## Disable local Telegram deploy notifications in .env
+	bash "$(PROJECT_ROOT)/scripts/dev/set-env-value.sh" DEPLOY_NOTIFICATION_ENABLED false
 
 remote-worker-up: ## Start experimental remote worker placeholder profile (not v1-supported)
 	docker compose --env-file "$(ENV_FILE)" -f "$(COMPOSE_FILE)" -f "$(COMPOSE_REMOTE_FILE)" --profile remote-worker up -d worker

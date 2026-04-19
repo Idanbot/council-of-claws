@@ -69,7 +69,11 @@ impl AuditService {
             "resource_id": resource_id,
             "allowed": allowed,
             "result": result,
-            "timestamp": chrono::Utc::now()
+            "level": if allowed { "info" } else { "error" },
+            "summary": reason.unwrap_or("audit event"),
+            "stream_connection": "audit",
+            "timestamp": chrono::Utc::now().timestamp(),
+            "created_at": chrono::Utc::now()
         });
         self.ws_hub.broadcast(event_payload.clone());
 
@@ -80,5 +84,26 @@ impl AuditService {
             "*",
             &[("data", event_payload.to_string())]
         ).await;
+
+        let mut recent_events: Vec<serde_json::Value> = conn
+            .get::<_, Option<String>>("dash:events:recent")
+            .await
+            .ok()
+            .flatten()
+            .and_then(|data| serde_json::from_str::<serde_json::Value>(&data).ok())
+            .and_then(|json| json.get("events").and_then(|items| items.as_array()).cloned())
+            .unwrap_or_default();
+
+        recent_events.insert(0, json!({
+            "level": if allowed { "info" } else { "error" },
+            "summary": reason.unwrap_or("audit event"),
+            "stream_connection": "audit",
+            "timestamp": chrono::Utc::now().timestamp(),
+        }));
+        recent_events.truncate(25);
+
+        let _: redis::RedisResult<()> = conn
+            .set("dash:events:recent", json!({ "events": recent_events }).to_string())
+            .await;
     }
 }

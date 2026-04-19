@@ -10,6 +10,50 @@ export interface Agent {
     elapsed_seconds: number;
 }
 
+export interface ConfiguredAgent {
+    agent_id: string;
+    role: string;
+    primary_model: string;
+    fallbacks: string[];
+    priority: string;
+}
+
+export interface AgentStatusSnapshot {
+    configured: ConfiguredAgent;
+    live?: Agent | null;
+    heartbeat_age_seconds?: number | null;
+    status: 'live' | 'stale' | 'configured' | string;
+}
+
+export interface AgentsStatusReport {
+    generated_at: string;
+    heartbeat_ttl_seconds: number;
+    configured_count: number;
+    live_count: number;
+    stale_count: number;
+    agents: AgentStatusSnapshot[];
+}
+
+export interface ProviderStatus {
+    provider: string;
+    configured: boolean;
+    via?: string | null;
+}
+
+export interface ModelProviderStatus {
+    generated_at: string;
+    providers: ProviderStatus[];
+    configured_agents: ConfiguredAgent[];
+}
+
+export interface AdminRuntimeStatus {
+    generated_at: string;
+    gateway: { status: string; message?: string };
+    providers: ProviderStatus[];
+    backend_log_tail: string[];
+    notes: string[];
+}
+
 export interface Task {
     id: string;
     title: string;
@@ -51,6 +95,19 @@ export interface SystemHealth {
     };
 }
 
+export interface DiagnosticsCheck {
+    name: string;
+    status: string;
+    info: string;
+    duration_ms: number;
+}
+
+export interface DiagnosticsReport {
+    generated_at: string;
+    overall_status: string;
+    checks: DiagnosticsCheck[];
+}
+
 export interface QueueSummary {
     pending_critical: number;
     pending_high: number;
@@ -68,6 +125,20 @@ export interface DashboardEvent {
     summary: string;
     stream_connection: string;
     timestamp: number;
+}
+
+export interface AuditEvent {
+    id: string;
+    request_id?: string | null;
+    agent_id?: string | null;
+    operation: string;
+    resource_type?: string | null;
+    resource_id?: string | null;
+    allowed: boolean;
+    result?: string | null;
+    reason?: string | null;
+    metadata?: unknown;
+    created_at: string;
 }
 
 export interface CouncilRun {

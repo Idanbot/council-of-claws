@@ -1,7 +1,21 @@
 // API client for council-of-claws dashboard
 // Makes HTTP calls to backend at /api/*
 
-import type { Agent, CouncilRun, DashboardEvent, Overview, SystemHealth, Task, UsageSummary } from './models';
+import type {
+    AdminRuntimeStatus,
+    Agent,
+    AgentsStatusReport,
+    AuditEvent,
+    ConfiguredAgent,
+    CouncilRun,
+    DashboardEvent,
+    DiagnosticsReport,
+    ModelProviderStatus,
+    Overview,
+    SystemHealth,
+    Task,
+    UsageSummary
+} from './models';
 
 const API_BASE = '/api';
 
@@ -71,6 +85,14 @@ export async function getAgent(agentId: string) {
     return apiCall<{ agent?: Agent; runs?: unknown[]; usage?: unknown[] }>(`/agents/${agentId}`);
 }
 
+export async function getConfiguredAgents() {
+    return apiCall<ConfiguredAgent[]>('/agents/configured');
+}
+
+export async function getAgentsStatus() {
+    return apiCall<AgentsStatusReport>('/agents/status');
+}
+
 // Task endpoints
 export async function getTasks() {
     return apiCall<Task[]>('/tasks');
@@ -107,16 +129,35 @@ export async function getEvents() {
     return apiCall<DashboardEvent[]>('/events');
 }
 
+export async function getAudit() {
+    return apiCall<AuditEvent[]>('/audit');
+}
+
+export async function getDiagnosticsReport() {
+    return apiCall<DiagnosticsReport>('/diagnostics/report');
+}
+
+export async function getModelsStatus() {
+    return apiCall<ModelProviderStatus>('/models/status');
+}
+
+export async function getAdminRuntimeStatus() {
+    return apiCall<AdminRuntimeStatus>('/admin/runtime-status');
+}
+
 // WebSocket connection
-export function createWebSocket(onMessage: (data: unknown) => void): WebSocket {
+export function createWebSocket(
+    onMessage: (data: unknown) => void,
+    onConnectionChange?: (connected: boolean) => void
+): WebSocket {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    // Use window.location.host which includes the port
     const wsUrl = `${protocol}//${window.location.host}/ws`;
     console.log(`[WS] Connecting to ${wsUrl}`);
     const ws = new WebSocket(wsUrl);
 
     ws.onopen = () => {
         console.log('[WS] Connection established');
+        onConnectionChange?.(true);
     };
 
     ws.onmessage = (event) => {
@@ -130,6 +171,10 @@ export function createWebSocket(onMessage: (data: unknown) => void): WebSocket {
 
     ws.onerror = (error) => {
         console.error('WebSocket error:', error);
+    };
+
+    ws.onclose = () => {
+        onConnectionChange?.(false);
     };
 
     return ws;

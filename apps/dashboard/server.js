@@ -1,4 +1,5 @@
 import http from 'http';
+import net from 'net';
 import { handler } from './build/handler.js';
 import { env } from 'process';
 
@@ -93,33 +94,35 @@ const server = http.createServer((req, res) => {
 server.on('upgrade', (req, socket, head) => {
   if (req.url === '/ws') {
     const backendUrl = new URL(BACKEND_URL);
-    const options = {
-      port: backendUrl.port || 80,
-      host: backendUrl.hostname,
-      method: 'GET',
-      path: '/ws',
-      headers: {
-        'Connection': 'Upgrade',
-        'Upgrade': 'websocket',
-        'Host': backendUrl.host,
-        ...req.headers
-      }
-    };
+    const proxySocket = net.connect(
+      Number(backendUrl.port || 80),
+      backendUrl.hostname,
+      () => {
+        const headerLines = Object.entries(req.headers)
+          .map(([key, value]) => `${key}: ${Array.isArray(value) ? value.join(', ') : value}`)
+          .join('\r\n');
 
-    const proxyReq = http.request(options);
-    proxyReq.on('upgrade', (proxyRes, proxySocket, proxyHead) => {
-      socket.write('HTTP/1.1 101 Switching Protocols\r\n' +
-                   'Upgrade: websocket\r\n' +
-                   'Connection: Upgrade\r\n' +
-                   '\r\n');
-      proxySocket.pipe(socket);
-      socket.pipe(proxySocket);
+        proxySocket.write(
+          `GET /ws HTTP/${req.httpVersion}\r\n` +
+          `${headerLines}\r\n` +
+          `\r\n`
+        );
+
+        if (head?.length) {
+          proxySocket.write(head);
+        }
+
+        socket.pipe(proxySocket);
+        proxySocket.pipe(socket);
+      }
+    );
+
+    proxySocket.on('error', (err) => {
+      console.error(`[WS PROXY ERROR]: ${err.message}`);
+      socket.destroy();
     });
-    proxyReq.on('error', (err) => {
-        console.error(`[WS PROXY ERROR]: ${err.message}`);
-        socket.destroy();
-    });
-    proxyReq.end();
+
+    socket.on('error', () => proxySocket.destroy());
   } else {
     socket.destroy();
   }

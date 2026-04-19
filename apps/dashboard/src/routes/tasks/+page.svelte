@@ -8,6 +8,7 @@
   let tasks: Task[] = [];
   let loading = true;
   let error: string | null = null;
+  let syncedAt = '';
 
   async function fetchTasks() {
     loading = true;
@@ -16,6 +17,7 @@
       error = apiError.message;
     } else if (data) {
       tasks = data;
+      syncedAt = new Date().toLocaleTimeString([], { hour12: false });
     }
     loading = false;
   }
@@ -47,6 +49,10 @@
       Synchronize
     </button>
   </div>
+
+  {#if syncedAt}
+    <div class="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">Last sync: {syncedAt}</div>
+  {/if}
 
   {#if error}
     <div class="glass-card border-rose-500/30 bg-rose-500/5 p-12 text-center" in:fade>

@@ -18,4 +18,5 @@ ensure_container_writable_dir() {
 ensure_container_writable_dir data/openclaw
 ensure_container_writable_dir data/openclaw/config
 ensure_container_writable_dir data/obsidian
+ensure_container_writable_dir data/postgres
 ensure_container_writable_dir data/workspace

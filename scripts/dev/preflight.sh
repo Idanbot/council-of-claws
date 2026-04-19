@@ -8,8 +8,11 @@ bash scripts/dev/prepare-data-dirs.sh
 
 ENV_FILE="${ENV_FILE:-.env}"
 DEPLOY_MODE="false"
+TUNNEL_MODE="false"
 if [[ "${1:-}" == "--deploy" ]]; then
   DEPLOY_MODE="true"
+elif [[ "${1:-}" == "--tunnel" ]]; then
+  TUNNEL_MODE="true"
 fi
 
 require_cmd() {
@@ -104,6 +107,14 @@ check_writable_dir data/obsidian
 check_writable_dir data/workspace
 warn_if_inaccessible_dir data/postgres
 warn_if_inaccessible_dir data/redis
+
+if [[ "$TUNNEL_MODE" == "true" ]]; then
+  cloudflared_token="$(get_env_value CLOUDFLARED_TOKEN "" "$ENV_FILE")"
+  if [[ -z "$cloudflared_token" ]]; then
+    echo "CLOUDFLARED_TOKEN is required for tunnel mode"
+    exit 1
+  fi
+fi
 
 if [[ "$DEPLOY_MODE" == "true" ]]; then
   postgres_password="$(get_env_value POSTGRES_PASSWORD change-me "$ENV_FILE")"

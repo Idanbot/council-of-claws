@@ -205,9 +205,47 @@ jobs:
           echo "dashboard=$(decide_build '${{ steps.filter.outputs.dashboard }}' 'council-of-claws-dashboard')" >> "$GITHUB_OUTPUT"
           echo "gateway=$(decide_build '${{ steps.filter.outputs.gateway }}' 'council-of-claws-gateway')" >> "$GITHUB_OUTPUT"
 
+  test-backend:
+    runs-on: ubuntu-latest
+    needs: [check-images]
+    if: needs.check-images.outputs.backend == 'true'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6.0.2
+
+      - name: Set up Rust
+        uses: actions-rust-lang/setup-rust-toolchain@v1.11.0
+
+      - name: Run backend tests
+        working-directory: apps/backend
+        run: cargo test
+
+  test-dashboard:
+    runs-on: ubuntu-latest
+    needs: [check-images]
+    if: needs.check-images.outputs.dashboard == 'true'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6.0.2
+
+      - name: Setup Node
+        uses: actions/setup-node@v4.2.0
+        with:
+          node-version: 24
+          cache: "npm"
+          cache-dependency-path: apps/dashboard/package-lock.json
+
+      - name: Install dependencies
+        working-directory: apps/dashboard
+        run: npm ci
+
+      - name: Run dashboard tests
+        working-directory: apps/dashboard
+        run: npm run test:run
+
   publish-backend:
     runs-on: ubuntu-latest
-    needs: [openclaw-smoke, check-images]
+    needs: [openclaw-smoke, check-images, test-backend]
     if: needs.check-images.outputs.backend == 'true'
     permissions:
       contents: read
@@ -253,7 +291,7 @@ jobs:
 
   publish-dashboard:
     runs-on: ubuntu-latest
-    needs: [openclaw-smoke, check-images]
+    needs: [openclaw-smoke, check-images, test-dashboard]
     if: needs.check-images.outputs.dashboard == 'true'
     permissions:
       contents: read
@@ -356,6 +394,8 @@ jobs:
       - compose-smoke
       - openclaw-smoke
       - check-images
+      - test-backend
+      - test-dashboard
       - publish-backend
       - publish-dashboard
       - publish-gateway
@@ -370,6 +410,8 @@ jobs:
           STATUS_VALIDATE: ${{ needs.validate.result }}
           STATUS_COMPOSE: ${{ needs.compose-smoke.result }}
           STATUS_OPENCLAW: ${{ needs.openclaw-smoke.result }}
+          STATUS_TEST_BACKEND: ${{ needs.test-backend.result }}
+          STATUS_TEST_DASHBOARD: ${{ needs.test-dashboard.result }}
           STATUS_BACKEND: ${{ needs.publish-backend.result }}
           STATUS_DASHBOARD: ${{ needs.publish-dashboard.result }}
           STATUS_GATEWAY: ${{ needs.publish-gateway.result }}
@@ -399,6 +441,8 @@ jobs:
           ve="$(status_emoji "$STATUS_VALIDATE")"
           ce="$(status_emoji "$STATUS_COMPOSE")"
           oe="$(status_emoji "$STATUS_OPENCLAW")"
+          tbe="$(status_emoji "$STATUS_TEST_BACKEND")"
+          tde="$(status_emoji "$STATUS_TEST_DASHBOARD")"
           be="$(status_emoji "$STATUS_BACKEND")"
           de="$(status_emoji "$STATUS_DASHBOARD")"
           ge="$(status_emoji "$STATUS_GATEWAY")"
@@ -421,6 +465,10 @@ jobs:
           ${ce} <b>Compose Smoke:</b> ${STATUS_COMPOSE}
           ${oe} <b>OpenClaw Smoke:</b> ${STATUS_OPENCLAW}
           ━━━━━━━━━━━━━━━━━━━━
+          <b>Unit Tests</b>
+          ${tbe} <b>Backend Tests:</b> ${STATUS_TEST_BACKEND}
+          ${tde} <b>Dashboard Tests:</b> ${STATUS_TEST_DASHBOARD}
+          ━━━━━━━━━━━━━━━━━━━━
           <b>Build Decisions</b>
           - backend: <code>${DECISION_BACKEND}</code>
           - dashboard: <code>${DECISION_DASHBOARD}</code>
@@ -437,6 +485,7 @@ jobs:
           <a href='${run_url}'>🔍 View Workflow Run</a>
           EOF
           )"
+
 
           api="https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage"
           jq -n \

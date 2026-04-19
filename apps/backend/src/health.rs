@@ -44,6 +44,14 @@ pub fn get_backend_health() -> HealthResponse {
     }
 }
 
+pub fn health_status_label(status: &HealthStatus) -> &'static str {
+    match status {
+        HealthStatus::Healthy => "healthy",
+        HealthStatus::Degraded => "degraded",
+        HealthStatus::Unhealthy => "unhealthy",
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

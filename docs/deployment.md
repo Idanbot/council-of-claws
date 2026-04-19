@@ -6,9 +6,22 @@ The platform is designed to support two distinct handoff modes:
 - `resume-state`: move a sanitized `data/` snapshot when you want exact continuity.
 
 ## Prerequisites
-- Docker & Docker Compose.
-- Node.js (for local dashboard dev).
-- Rust (for local backend dev).
+
+### Minimal
+- Docker with Docker Compose v2 (`docker compose`)
+- `curl`
+- `python3`
+- `git`
+
+### Bootstrap/build tools
+- `make`
+- Node.js + `npm`
+- Rust + `cargo`
+
+### Optional
+- `CLOUDFLARED_TOKEN` in `.env` when using the optional tunnel profile
+- AI provider keys in `.env` for whichever models OpenClaw should use
+- `TELEGRAM_BOT_TOKEN` and `TELEGRAM_ALLOWED_USER_IDS` in `.env` when using the Telegram plugin
 
 ## Deployment Steps
 
@@ -17,8 +30,9 @@ The platform is designed to support two distinct handoff modes:
    ```bash
    make setup-env
    ```
-   `OPENCLAW_GATEWAY_TOKEN` controls Control UI access and defaults to a local-only development token. `MOCK_MODE` defaults to `false`.
+   `OPENCLAW_GATEWAY_TOKEN` controls Control UI access and defaults to a local-only development token.
    Rotate `POSTGRES_PASSWORD`, `OPENCLAW_GATEWAY_TOKEN`, and `AGENT_TOKENS` before the first deploy on a new machine.
+   Set `CLOUDFLARED_TOKEN` too if this machine should expose the optional tunnel profile.
 
 2. **Preflight:**
    Verify Docker access, `.env`, writable data directories, and local ports:
@@ -56,7 +70,17 @@ The platform is designed to support two distinct handoff modes:
    When both are configured, the workflow posts a Telegram summary covering checks, image build decisions, and image publish results.
 
 4. **Start the Stack:**
-   Build and start the local stack on a fresh machine.
+   Fresh machine or first bring-up:
+   ```bash
+   make launch
+   ```
+
+   Fresh machine with the optional tunnel profile:
+   ```bash
+   make launch-tunnel
+   ```
+
+   Direct build/start without the bootstrap wrapper:
    ```bash
    make compose-up-build
    ```
@@ -70,6 +94,7 @@ The platform is designed to support two distinct handoff modes:
    ```bash
    make compose-up-build-tunnel
    ```
+   `make launch-tunnel` and `make compose-up-build-tunnel` both read `.env`; `launch-tunnel` adds setup, preflight, and post-start verification.
 
 5. **Verify:**
    Check the dashboard at `http://127.0.0.1:3000`.
@@ -89,6 +114,25 @@ The runtime state lives under `data/`:
 - `data/openclaw`: Orchestrator internal state.
 
 The repo source is separate from that runtime state. OpenClaw loads repo-managed config from `apps/gateway/config/openclaw.json5` and repo-local skills from `.agents/skills`, while its writable state continues to live in `data/openclaw`.
+
+Additional runtime notes:
+- PostgreSQL 18 is mounted at `data/postgres -> /var/lib/postgresql`, which matches the image's versioned storage layout.
+- The gateway seeds `data/openclaw/config/openclaw.json5` from the repo bootstrap file on first boot only.
+- After first boot, runtime edits to `data/openclaw/config/openclaw.json5` persist across restarts.
+- To re-seed the gateway config from the repo bootstrap file, remove `data/openclaw/config/openclaw.json5` and restart the gateway.
+- The gateway listens on `0.0.0.0` inside the container, while Compose publishes it on `127.0.0.1:${GATEWAY_PORT}` on the host. This is expected and compatible with the optional Cloudflare tunnel.
+
+## Public Routes
+
+When the tunnel is enabled, the public hostname is controlled by the Cloudflare Tunnel configuration associated with `CLOUDFLARED_TOKEN`, not by files in this repo. The externally useful paths are:
+
+- Dashboard UI: `/`
+- Dashboard health: `/health`
+- Gateway redirect via dashboard: `/gateway`
+- Raw OpenClaw gateway UI: `/?token=<OPENCLAW_GATEWAY_TOKEN>`
+- Backend health is local-only by default: `http://127.0.0.1:8080/api/health`
+
+`/gateway` is the preferred external entry point because the dashboard app redirects it to the tokenized raw gateway URL for the same hostname.
 
 ## Repo-First Handoff
 

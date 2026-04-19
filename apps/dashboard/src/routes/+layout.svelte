@@ -3,7 +3,7 @@
   import { onMount } from 'svelte';
   import { page } from '$app/stores';
   import { fade, fly, slide } from 'svelte/transition';
-  import { initRealtime, wsConnected, systemState, lastRefreshed, refreshData } from '$lib/stores';
+  import { initRealtime, infrastructureOnline, transportStatus, lastRefreshed, refreshData, refreshing } from '$lib/stores';
 
   const navItems = [
     { href: '/', label: 'Overview', dot: 'bg-indigo-500' },
@@ -39,9 +39,9 @@
   <!-- Desktop Sidebar -->
   <aside class="hidden w-72 glass-sidebar md:flex md:flex-col fixed h-full z-40">
     <div class="flex h-20 items-center px-8 border-b border-white/5">
-      <span class="text-xs font-black uppercase tracking-[0.4em] text-white">
+      <a href="/" class="text-xs font-black uppercase tracking-[0.4em] text-white">
         Council of <span class="text-indigo-500">Claws</span>
-      </span>
+      </a>
     </div>
 
     <nav class="flex-1 space-y-1.5 px-4 py-8">
@@ -63,10 +63,10 @@
       <div class="flex flex-col gap-4">
         <div class="flex items-center justify-between">
           <span class="text-[10px] font-black uppercase tracking-widest text-slate-500">Infrastructure</span>
-          <div class="h-2 w-2 rounded-full animate-pulse { $wsConnected ? 'bg-emerald-500 shadow-[0_0_10px_#10b981]' : 'bg-rose-500 shadow-[0_0_10px_#f43f5e]' }"></div>
+          <div class="h-2 w-2 rounded-full animate-pulse { $infrastructureOnline ? 'bg-emerald-500 shadow-[0_0_10px_#10b981]' : 'bg-rose-500 shadow-[0_0_10px_#f43f5e]' }"></div>
         </div>
         <div class="flex flex-col gap-1">
-            <span class="text-[9px] font-bold text-slate-600 uppercase tracking-tighter">Stream: {$wsConnected ? 'CONNECTED' : 'OFFLINE'}</span>
+            <span class="text-[9px] font-bold text-slate-600 uppercase tracking-tighter">Stream: {$transportStatus}</span>
             <span class="text-[9px] font-bold text-slate-600 uppercase tracking-tighter">Updated: {$lastRefreshed.toLocaleTimeString()}</span>
         </div>
       </div>
@@ -92,8 +92,8 @@
         <a href="/gateway" class="btn-secondary text-[10px] uppercase tracking-widest px-4 h-9 inline-flex items-center">
           Open Gateway
         </a>
-        <button on:click={refreshData} class="btn-secondary text-[10px] uppercase tracking-widest px-4 h-9">
-            Synchronize
+        <button on:click={refreshData} class="btn-secondary text-[10px] uppercase tracking-widest px-4 h-9 min-w-[8rem]" disabled={$refreshing}>
+            {$refreshing ? 'Syncing…' : 'Synchronize'}
         </button>
       </div>
     </header>
@@ -118,7 +118,7 @@
       transition:slide={{ axis: 'x' }}
     >
       <div class="h-20 flex items-center px-8 border-b border-white/5">
-        <span class="text-xs font-black uppercase tracking-[0.4em]">Council of Claws</span>
+        <a href="/" class="text-xs font-black uppercase tracking-[0.4em]">Council of Claws</a>
       </div>
       <nav class="flex-1 px-4 py-8 space-y-2">
         {#each navItems as item}

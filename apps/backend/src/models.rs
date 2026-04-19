@@ -38,6 +38,33 @@ pub struct Agent {
     pub elapsed_seconds: i64,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ConfiguredAgent {
+    pub agent_id: String,
+    pub role: String,
+    pub primary_model: String,
+    pub fallbacks: Vec<String>,
+    pub priority: TaskPriority,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AgentStatusSnapshot {
+    pub configured: ConfiguredAgent,
+    pub live: Option<Agent>,
+    pub heartbeat_age_seconds: Option<i64>,
+    pub status: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AgentsStatusReport {
+    pub generated_at: DateTime<Utc>,
+    pub heartbeat_ttl_seconds: i64,
+    pub configured_count: usize,
+    pub live_count: usize,
+    pub stale_count: usize,
+    pub agents: Vec<AgentStatusSnapshot>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "snake_case")]
 pub enum AgentState {
@@ -345,15 +372,6 @@ pub struct ScopeProfile {
     pub allow_council_finalize: bool,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct AgentIdentity {
-    pub id: String,
-    pub display_name: String,
-    pub role: String,
-    pub scope_profile: Option<serde_json::Value>,
-    pub secret_hash: Option<String>,
-}
-
 // ============ Council State Machine ============
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -409,6 +427,44 @@ pub struct AuditEvent {
     pub reason: Option<String>,
     pub metadata: Option<serde_json::Value>,
     pub created_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DiagnosticsCheck {
+    pub name: String,
+    pub status: String,
+    pub info: String,
+    pub duration_ms: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DiagnosticsReport {
+    pub generated_at: DateTime<Utc>,
+    pub overall_status: String,
+    pub checks: Vec<DiagnosticsCheck>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProviderStatus {
+    pub provider: String,
+    pub configured: bool,
+    pub via: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ModelProviderStatus {
+    pub generated_at: DateTime<Utc>,
+    pub providers: Vec<ProviderStatus>,
+    pub configured_agents: Vec<ConfiguredAgent>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AdminRuntimeStatus {
+    pub generated_at: DateTime<Utc>,
+    pub gateway: ServiceMetrics,
+    pub providers: Vec<ProviderStatus>,
+    pub backend_log_tail: Vec<String>,
+    pub notes: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]

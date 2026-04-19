@@ -6,11 +6,13 @@
 
   let councils: CouncilRun[] = [];
   let loading = true;
+  let syncedAt = '';
 
   async function fetchCouncils() {
     loading = true;
     const { data } = await getCouncils();
     if (data) councils = data;
+    if (data) syncedAt = new Date().toLocaleTimeString([], { hour12: false });
     loading = false;
   }
 
@@ -30,6 +32,10 @@
       {loading ? 'Consulting archives...' : 'Refresh Councils'}
     </button>
   </div>
+
+  {#if syncedAt}
+    <div class="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">Last sync: {syncedAt}</div>
+  {/if}
 
   {#if loading && councils.length === 0}
     <div class="grid gap-8 sm:grid-cols-2">

@@ -1,6 +1,7 @@
 use crate::models::*;
 use crate::postgres_reader::PostgresReader;
 use crate::redis_reader::RedisReader;
+use crate::health;
 
 #[derive(Clone)]
 pub struct SummaryBuilder {
@@ -31,7 +32,9 @@ impl SummaryBuilder {
             failed: 0,
         });
         let recent_events = self.redis_reader.get_recent_events().await.unwrap_or_default();
-        let system_health = self.redis_reader.get_system_health().await.unwrap_or(SystemHealth {
+        let redis_health = health::check_redis(&self.redis_reader.connection_manager()).await;
+        let postgres_health = health::check_postgres(&self.postgres_reader.pool()).await;
+        let system_health = SystemHealth {
             timestamp: chrono::Utc::now().timestamp(),
             host: crate::models::HostMetrics {
                 cpu_percent: 0.0,
@@ -39,27 +42,27 @@ impl SummaryBuilder {
                 disk_percent: 0.0,
             },
             redis: crate::models::ServiceMetrics {
-                status: "unknown".to_string(),
-                message: None,
+                status: health::health_status_label(&redis_health.status).to_string(),
+                message: redis_health.message,
             },
             postgres: crate::models::ServiceMetrics {
-                status: "unknown".to_string(),
-                message: None,
+                status: health::health_status_label(&postgres_health.status).to_string(),
+                message: postgres_health.message,
             },
             backend: crate::models::ServiceMetrics {
-                status: "unknown".to_string(),
-                message: None,
+                status: "ok".to_string(),
+                message: Some("Backend router active".to_string()),
             },
             frontend: crate::models::ServiceMetrics {
                 status: "unknown".to_string(),
-                message: None,
+                message: Some("Frontend is checked from the dashboard container, not the backend".to_string()),
             },
             containers: crate::models::ContainerMetrics {
                 running: 0,
                 stopped: 0,
                 unhealthy: 0,
             },
-        });
+        };
 
         // Fetch from PostgreSQL
         let active_agents = agents

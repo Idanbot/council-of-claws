@@ -5,11 +5,26 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$ROOT_DIR"
 
 ENV_FILE="${ENV_FILE:-.env}"
+VERIFY_STAMP_FILE="${VERIFY_STAMP_FILE:-/tmp/council-of-claws-post-start-verify.ok}"
 
 if [[ ! -f "$ENV_FILE" ]]; then
   echo "Missing ${ENV_FILE}. Run 'make setup-env' first."
   exit 1
 fi
+
+require_cmd() {
+  if ! command -v "$1" >/dev/null 2>&1; then
+    echo "Missing required command: $1"
+    exit 1
+  fi
+}
+
+require_cmd curl
+require_cmd python3
+
+log() {
+  printf '[post-start-verify] %s\n' "$1"
+}
 
 get_env_value() {
   local key="$1"
@@ -27,14 +42,23 @@ wait_for_http() {
   local name="$1"
   local url="$2"
   local retries="${3:-45}"
+  local total_retries="$retries"
+  local attempts=1
+
+  log "Checking ${name}: ${url}"
   until curl -fsS "$url" >/dev/null 2>&1; do
     retries=$((retries - 1))
     if [[ "$retries" -le 0 ]]; then
-      echo "${name} did not become ready: ${url}"
+      echo "${name} did not become ready after ${attempts} attempts: ${url}"
       exit 1
     fi
+    if (( attempts == 1 || attempts % 5 == 0 )); then
+      log "${name} not ready yet; waiting (attempt ${attempts}/${total_retries})"
+    fi
+    attempts=$((attempts + 1))
     sleep 2
   done
+  log "${name} ready after ${attempts} attempt(s)"
 }
 
 dashboard_port="$(get_env_value DASHBOARD_PORT 3000)"
@@ -49,22 +73,28 @@ if [[ -z "$director_token" ]]; then
   exit 1
 fi
 
+log "Starting post-start verification"
 wait_for_http "dashboard health" "http://127.0.0.1:${dashboard_port}/health" 45
 wait_for_http "backend health" "http://127.0.0.1:${backend_port}/api/health" 45
 wait_for_http "OpenClaw gateway" "http://127.0.0.1:${gateway_port}/?token=${gateway_token}" 60
 
+log "Validating backend health payload"
 backend_health="$(curl -fsS "http://127.0.0.1:${backend_port}/api/health")"
 if ! grep -Eq '"status"\s*:\s*"(ok|healthy)"' <<<"$backend_health"; then
   echo "Unexpected backend health payload: $backend_health"
   exit 1
 fi
+log "Backend health payload looks good"
 
+log "Validating dashboard health payload"
 dashboard_health="$(curl -fsS "http://127.0.0.1:${dashboard_port}/health")"
 if ! grep -Eq '"status"\s*:\s*"(ok|healthy)"' <<<"$dashboard_health"; then
   echo "Unexpected dashboard health payload: $dashboard_health"
   exit 1
 fi
+log "Dashboard health payload looks good"
 
+log "Running authenticated coc-tool health check"
 coc_health="$(
   COC_BACKEND_BASE_URL="http://127.0.0.1:${backend_port}" \
   COC_AGENT_ID="director" \
@@ -77,4 +107,7 @@ if ! grep -Eq '"status"\s*:\s*"(ok|healthy)"' <<<"$coc_health"; then
   exit 1
 fi
 
+printf '%s\n' "$(date -u +%s)" > "$VERIFY_STAMP_FILE"
+log "Authenticated coc-tool health looks good"
+log "Wrote verification stamp: ${VERIFY_STAMP_FILE}"
 echo "Post-start verification passed"

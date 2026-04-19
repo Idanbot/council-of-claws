@@ -1,13 +1,24 @@
 <script lang="ts">
-  import { systemState, agents, activeTasks, auditLogs } from '$lib/stores';
+  import { systemState, agents, activeTasks, streamEvents, liveAgents } from '$lib/stores';
   import { fade, fly } from 'svelte/transition';
   import { flip } from 'svelte/animate';
+  import { configuredAgentLabels } from '$lib/configured-agents';
+
+  $: backendStatus = $systemState?.system_health?.backend?.status;
+  $: platformLabel =
+    backendStatus === 'ok' || backendStatus === 'healthy'
+      ? 'NOMINAL'
+      : backendStatus === 'unknown'
+        ? 'UNKNOWN'
+        : backendStatus
+          ? 'DEGRADED'
+          : 'UNKNOWN';
 
   $: stats = [
-    { label: 'Active Agents', value: $agents.length, color: 'text-indigo-500' },
+    { label: 'Active Agents', value: $liveAgents.length, color: 'text-indigo-500' },
     { label: 'Queue Depth', value: ($systemState?.queue_summary.pending_normal || 0) + ($systemState?.queue_summary.pending_critical || 0), color: 'text-amber-500' },
     { label: 'Token Burn', value: `$${$systemState?.queue_summary.completed || 0}`, color: 'text-emerald-500' },
-    { label: 'Platform', value: $systemState?.system_health.backend.status === 'ok' ? 'NOMINAL' : 'DEGRADED', color: 'text-white' }
+    { label: 'Platform', value: platformLabel, color: platformLabel === 'NOMINAL' ? 'text-white' : platformLabel === 'UNKNOWN' ? 'text-slate-400' : 'text-rose-400' }
   ];
 </script>
 
@@ -35,7 +46,7 @@
         Active Intelligence
       </div>
       <div class="grid gap-4 mt-6">
-        {#each $agents as agent (agent.agent_id)}
+        {#each $liveAgents as agent (agent.agent_id)}
           <div
             class="glass-card p-6 flex items-center justify-between group glass-card-hover"
             animate:flip={{ duration: 400 }}
@@ -47,7 +58,7 @@
               </div>
               <div>
                 <div class="text-sm font-black text-white tracking-tight">{agent.agent_id}</div>
-                <div class="text-[10px] text-slate-500 uppercase tracking-widest mt-0.5">{agent.model}</div>
+                <div class="text-[10px] text-slate-500 uppercase tracking-widest mt-0.5">{configuredAgentLabels[agent.agent_id] || agent.model}</div>
               </div>
             </div>
             <div class="text-right">
@@ -59,7 +70,7 @@
           </div>
         {:else}
           <div class="glass-card bg-white/[0.02] border-dashed py-12 text-center text-xs font-bold text-slate-600 uppercase tracking-[0.2em]">
-            No autonomous agents online
+            No live agents online. See the Agents page for configured roster and model assignments.
           </div>
         {/each}
       </div>
@@ -72,21 +83,19 @@
         Signal Stream
       </div>
       <div class="glass-card mt-6 divide-y divide-white/5 overflow-hidden">
-        {#each $auditLogs.slice(0, 8) as log (log.id)}
+        {#each $streamEvents.slice(0, 8) as log, i (`${log.timestamp}-${i}`)}
           <div class="px-6 py-4 flex items-center gap-4 transition-colors hover:bg-white/[0.03]" in:fly={{ x: 20 }}>
-            <div class="h-1.5 w-1.5 rounded-full {log.allowed ? 'bg-emerald-500 shadow-[0_0_8px_#10b981]' : 'bg-rose-500'}"></div>
+            <div class="h-1.5 w-1.5 rounded-full {log.level === 'error' ? 'bg-rose-500' : log.level === 'warn' ? 'bg-amber-500' : 'bg-emerald-500 shadow-[0_0_8px_#10b981]'}"></div>
             <div class="min-w-0 flex-1">
               <div class="text-[11px] font-black text-white uppercase tracking-tight">
-                <span class="text-indigo-400">{log.agent_id || 'SYSTEM'}</span>
-                <span class="mx-1 text-slate-600">»</span>
-                {log.operation.replace('_', ' ')}
+                <span class="text-indigo-400">{log.stream_connection || 'SYSTEM'}</span>
               </div>
               <div class="mt-0.5 truncate text-[10px] font-bold text-slate-500 uppercase tracking-tighter">
-                {log.resource_type}: {log.resource_id}
+                {log.summary}
               </div>
             </div>
             <time class="text-[9px] font-black text-slate-600 tabular-nums">
-              {new Date(log.created_at).toLocaleTimeString([], { hour12: false })}
+              {new Date(log.timestamp * 1000).toLocaleTimeString([], { hour12: false })}
             </time>
           </div>
         {:else}

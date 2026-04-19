@@ -1,6 +1,7 @@
 {
   gateway: {
     mode: "local",
+    trustedProxies: ["${TRUSTED_PROXY_CIDR}"],
     auth: {
       mode: "token",
       token: "${OPENCLAW_GATEWAY_TOKEN}",
@@ -11,6 +12,9 @@
         "http://127.0.0.1:18789",
         "http://localhost:3000",
         "http://127.0.0.1:3000",
+        "${PUBLIC_GATEWAY_ORIGIN}",
+        "${PUBLIC_DASHBOARD_ORIGIN}",
+        "${PUBLIC_DASHBOARD_INSECURE_ORIGIN}",
       ],
     },
   },
@@ -25,12 +29,51 @@
       workspace: "/workspace",
       repoRoot: "/repo",
       userTimezone: "${TIMEZONE}",
+      // Shared model catalog and allowlist for the Control UI and /model picker.
+      // OpenClaw resolves the primary model first, then fallbacks in order.
+      models: {
+        "openai/gpt-5.4": { alias: "gpt" },
+        "openai/gpt-5.4-mini": { alias: "gpt-mini" },
+        "google/gemini-3.1-pro-preview": { alias: "gemini-pro" },
+        "google/gemini-3-flash-preview": { alias: "gemini-flash" },
+        "groq/llama-3.3-70b-versatile": { alias: "groq-large" },
+        "groq/llama-3.1-8b-instant": { alias: "groq-fast" },
+        // Optional when GitHub Copilot auth is configured for the gateway.
+        "github-copilot/gpt-4o": { alias: "copilot-gpt" },
+      },
+      model: {
+        primary: "google/gemini-3.1-pro-preview",
+        fallbacks: [
+          "github-copilot/gpt-4o",
+          "groq/llama-3.3-70b-versatile",
+          "google/gemini-3-flash-preview",
+          "openai/gpt-5.4-mini",
+          "groq/llama-3.1-8b-instant",
+          "openai/gpt-5.4",
+        ],
+      },
+      imageModel: {
+        primary: "google/gemini-3-flash-preview",
+        fallbacks: ["openai/gpt-5.4-mini", "openai/gpt-5.4"],
+      },
+      pdfModel: {
+        primary: "google/gemini-3-flash-preview",
+        fallbacks: ["openai/gpt-5.4-mini", "openai/gpt-5.4"],
+      },
     },
     list: [
       {
         id: "contractor",
         default: true,
         workspace: "/workspace",
+        model: {
+          primary: "github-copilot/gpt-4o",
+          fallbacks: [
+            "groq/llama-3.3-70b-versatile",
+            "google/gemini-3-flash-preview",
+            "openai/gpt-5.4-mini",
+          ],
+        },
         skills: ["coc-tool", "repo-readonly", "backend-audit", "obsidian-memory"],
         subagents: {
           allowAgents: ["director"],
@@ -39,6 +82,14 @@
       {
         id: "director",
         workspace: "/workspace",
+        model: {
+          primary: "google/gemini-3.1-pro-preview",
+          fallbacks: [
+            "github-copilot/gpt-4o",
+            "openai/gpt-5.4",
+            "groq/llama-3.3-70b-versatile",
+          ],
+        },
         skills: ["coc-tool", "repo-readonly", "backend-audit", "obsidian-memory"],
         subagents: {
           allowAgents: ["architect", "senior-engineer", "junior-engineer", "intern"],
@@ -47,6 +98,10 @@
       {
         id: "architect",
         workspace: "/workspace",
+        model: {
+          primary: "google/gemini-3.1-pro-preview",
+          fallbacks: ["github-copilot/gpt-4o", "openai/gpt-5.4"],
+        },
         skills: ["repo-readonly", "backend-audit", "obsidian-memory"],
         subagents: {
           allowAgents: ["director", "senior-engineer", "junior-engineer"],
@@ -55,16 +110,38 @@
       {
         id: "senior-engineer",
         workspace: "/workspace",
+        model: {
+          primary: "github-copilot/gpt-4o",
+          fallbacks: [
+            "openai/gpt-5.4",
+            "google/gemini-3.1-pro-preview",
+            "groq/llama-3.3-70b-versatile",
+          ],
+        },
         skills: ["coc-tool", "repo-readonly", "backend-audit", "obsidian-memory"],
       },
       {
         id: "junior-engineer",
         workspace: "/workspace",
+        model: {
+          primary: "groq/llama-3.3-70b-versatile",
+          fallbacks: [
+            "google/gemini-3-flash-preview",
+            "github-copilot/gpt-4o",
+            "openai/gpt-5.4-mini",
+          ],
+        },
         skills: ["repo-readonly", "backend-audit", "obsidian-memory"],
       },
       {
         id: "intern",
         workspace: "/workspace",
+        model: {
+          primary: "groq/llama-3.1-8b-instant",
+          fallbacks: [
+            "google/gemini-3-flash-preview",
+          ],
+        },
         skills: ["backend-audit", "obsidian-memory"],
       },
     ],

@@ -9,6 +9,7 @@ The Council of Claws is a multi-agent orchestration platform designed for autono
 - **Function:** Routes incoming requests from the Control UI and optional Telegram channel to named agents, manages agent state, and loads repo-local skills from `.agents/skills`.
 - **Communication:** Connects to Redis for the real-time event bus and PostgreSQL for long-term memory.
 - **Layout:** Uses a persistent mutable workspace at `/workspace` and a separate read-only repo mirror at `/repo`.
+- **Config Model:** Seeds `data/openclaw/config/openclaw.json5` from the repo bootstrap file on first boot, then keeps the runtime file persistent across restarts.
 
 ### 2. Rust Backend (The Controller)
 - **Role:** The central authority for the platform's state and business logic.
@@ -38,3 +39,12 @@ The Council of Claws is a multi-agent orchestration platform designed for autono
 6. **Observation:** The Dashboard updates instantly, showing the new Mission and Tasks.
 7. **Execution:** Worker agents (`senior-engineer`, `junior-engineer`, etc.) claim tasks and report progress.
 8. **Narrative:** Upon mission closure, the Backend generates a comprehensive summary in the Obsidian vault.
+
+## Access Surfaces
+
+- Dashboard UI: `/`
+- Dashboard health: `/health`
+- Gateway redirect route from the dashboard app: `/gateway`
+- Raw tokenized OpenClaw UI: `/?token=<OPENCLAW_GATEWAY_TOKEN>`
+
+The dashboard redirect route constructs the raw gateway URL for the current hostname, so it remains the safest stable UI entry point when the stack is accessed through the optional Cloudflare tunnel.

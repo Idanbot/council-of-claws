@@ -33,14 +33,47 @@ The Council of Claws is an autonomous platform powered by **OpenClaw** and a hig
 - **Documentation:** Obsidian (Narrative Vault)
 - **Infrastructure:** Docker Compose + Cloudflare Tunnels
 
+## ✅ Prerequisites
+
+### Minimal requirements
+
+These are the tools needed to clone the repo, build the local stack, and run the built-in verification flow:
+
+- `docker` with Docker Compose v2 (`docker compose`)
+- `curl`
+- `python3`
+- `git`
+
+### Project bootstrap tools
+
+These are used by `make setup`, `make launch`, and `make launch-tunnel` to prepare local app dependencies before the Docker build:
+
+- `node` and `npm`
+- `rust` and `cargo`
+- `make`
+
+### Optional requirements
+
+These are only needed for specific modes or workflows:
+
+- `CLOUDFLARED_TOKEN` in `.env` for the optional tunnel profile (`make launch-tunnel`, `make compose-up-tunnel`, `make compose-up-build-tunnel`)
+- `AGENT_HEARTBEAT_TTL_SECS` in `.env` to control stale-agent eviction from runtime telemetry (`120` seconds default)
+- AI provider keys in `.env` for whichever upstream models you actually want OpenClaw to use
+- Optional GitHub Copilot auth in `.env` via `COPILOT_GITHUB_TOKEN` (preferred), `GH_TOKEN`, or `GITHUB_TOKEN`, or interactively via `make copilot-login`
+- `TELEGRAM_BOT_TOKEN` and `TELEGRAM_ALLOWED_USER_IDS` in `.env` if you want the Telegram plugin enabled
+- `TELEGRAM_BOT_TOKEN`, `TELEGRAM_ALLOWED_USER_IDS`, and `DEPLOY_NOTIFICATION_ENABLED=true` in `.env` if you want an optional Telegram deploy notification after a successful verified launch
+  The local deploy notification uses only the first ID from `TELEGRAM_ALLOWED_USER_IDS` if multiple IDs are comma-separated.
+
 ## 🏁 Getting Started
 
 1. **Environment:**
    ```bash
    make setup-env
    ```
-   Fill in the provider keys you actually use in `.env`. `OPENCLAW_GATEWAY_TOKEN` protects the OpenClaw Control UI. `MOCK_MODE` now defaults to `false`.
+   Fill in the provider keys you actually use in `.env`. `OPENCLAW_GATEWAY_TOKEN` protects the OpenClaw Control UI.
    Before moving to a new machine, rotate `POSTGRES_PASSWORD`, `OPENCLAW_GATEWAY_TOKEN`, and `AGENT_TOKENS`.
+
+   If you want the optional Cloudflare tunnel profile, set `CLOUDFLARED_TOKEN` too.
 
    Run the preflight before startup:
    ```bash
@@ -53,8 +86,31 @@ The Council of Claws is an autonomous platform powered by **OpenClaw** and a hig
    ```
 
 2. **Launch:**
+   Fresh machine or first local bring-up:
+   ```bash
+   make launch
+   ```
+   This runs:
+   - `make setup`
+   - `make preflight`
+   - `make compose-up-build`
+   - `make post-start-verify`
+   - `make post-start-notify` when deploy notifications are enabled
+
+   Fresh machine with the optional tunnel profile:
+   ```bash
+   make launch-tunnel
+   ```
+   This runs the same bootstrap flow, but with the Compose `tunnel` profile, an extra preflight check that `CLOUDFLARED_TOKEN` is present, and the same optional post-start notification step.
+
+   If you only want to build and start the stack directly:
    ```bash
    make compose-up-build
+   ```
+
+   If you want a full serial restart that avoids compose race conditions on rapid rebuilds:
+   ```bash
+   make relaunch
    ```
 
    After the first successful build, normal restarts can use:
@@ -66,19 +122,152 @@ The Council of Claws is an autonomous platform powered by **OpenClaw** and a hig
    ```bash
    make compose-up-build-tunnel
    ```
+   Serial restart with tunnel profile:
+   ```bash
+   make relaunch-tunnel
+   ```
+   `make compose-up-tunnel` and `make compose-up-build-tunnel` use the same profile; both read `.env` through Docker Compose.
 
 3. **Access:**
    - **Dashboard:** `http://localhost:3000`
    - **Gateway UI:** `http://localhost:3000/gateway`
-   - **Raw Gateway URL:** `http://localhost:18789/?token=<OPENCLAW_GATEWAY_TOKEN>`
+   - **Raw Gateway URL:** `http://localhost:18789/#token=<OPENCLAW_GATEWAY_TOKEN>`
    - **Health API:** `http://localhost:8080/api/health`
-   - Prefer `/gateway` from the dashboard or `make gateway-url` so the tokenized Control UI URL is used consistently.
+   - Prefer `/gateway` from the dashboard. The dashboard route redirects to the raw gateway URL with the shared token bootstrap attached.
 
 4. **Verify After Start:**
    ```bash
    make post-start-verify
    ```
-   This checks dashboard health, backend health, the tokenized OpenClaw URL, and an authenticated `coc-tool health` call.
+   This logs each verification step, waits for the dashboard, backend, and tokenized OpenClaw URL to come up, validates the health payloads, and runs an authenticated `coc-tool health` call.
+
+   Run dashboard component tests (Agents and System pages included):
+   ```bash
+   make dashboard-test
+   ```
+
+5. **Generate Fresh Secrets:**
+   Print fresh values without changing `.env`:
+   ```bash
+   make generate-secrets
+   ```
+
+   Generate fresh values, write them into `.env`, and print the applied values:
+   ```bash
+   make generate-secrets-apply
+   ```
+
+   These targets generate:
+   - `OPENCLAW_GATEWAY_TOKEN`
+   - `AGENT_TOKENS=director=...`
+
+6. **Approve First Remote Browser/Device Pairing:**
+   Remote Control UI sessions are not auto-approved. The first time you open the Control UI from a non-localhost browser profile, OpenClaw creates a pending pairing request that must be approved once.
+
+   List pending requests:
+   ```bash
+   make devices-list
+   ```
+
+   Approve the newest pending request:
+   ```bash
+   make devices-approve-latest
+   ```
+
+   Or approve a specific request ID:
+   ```bash
+   make devices-approve REQUEST_ID=<request-id>
+   ```
+
+   After approval, re-open the Control UI from the dashboard route or the raw gateway URL.
+
+7. **Model Providers And Fallbacks:**
+   The gateway now has an explicit repo-managed model pool and per-agent priority chain in:
+   - `apps/gateway/config/openclaw.json5`
+   - `data/openclaw/config/openclaw.json5`
+
+   Wired providers:
+   - `openai` from `OPENAI_API_KEY`
+   - `google` from `GEMINI_API_KEY`
+   - `groq` from `GROQ_API_KEY`
+   - optional `github-copilot` from `COPILOT_GITHUB_TOKEN`, `GH_TOKEN`, `GITHUB_TOKEN`, or interactive device login
+
+   Current shared model pool includes:
+   - `openai/gpt-5.4`
+   - `openai/gpt-5.4-mini`
+   - `google/gemini-3.1-pro-preview`
+   - `google/gemini-3-flash-preview`
+   - `groq/llama-3.3-70b-versatile`
+   - `groq/llama-3.1-8b-instant`
+   - optional `github-copilot/gpt-4o`
+   - optional `github-copilot/gpt-4.1`
+
+   Useful inspection commands:
+   ```bash
+   make models-status
+   make models-status AGENT=director
+   make models-list
+   make models-list PROVIDER=groq
+   ```
+
+   To connect GitHub Copilot interactively and persist it into the gateway auth store:
+   ```bash
+   make copilot-login
+   ```
+
+   The Copilot login writes into the persisted OpenClaw data directory, so it survives container restarts.
+
+8. **Optional Telegram Deploy Notification:**
+   You can enable a one-time Telegram message after `make launch` or `make launch-tunnel` finishes.
+
+   Turn it on:
+   ```bash
+   make deploy-notification-on
+   ```
+
+   Turn it off:
+   ```bash
+   make deploy-notification-off
+   ```
+
+   Required `.env` keys:
+   - `TELEGRAM_BOT_TOKEN`
+   - `TELEGRAM_ALLOWED_USER_IDS`
+   - `DEPLOY_NOTIFICATION_ENABLED=true`
+
+   If `TELEGRAM_ALLOWED_USER_IDS` contains multiple comma-separated IDs, the local deploy notification sends only to the first one.
+
+   Manual trigger:
+   ```bash
+   make post-start-notify
+   ```
+
+   `make post-start-notify` waits briefly for Compose health to settle. If Docker health is still catching up but a recent `make post-start-verify` succeeded, the notification is still sent and the message marks the still-starting services clearly.
+
+   The message includes a timestamp, compose service readiness summary, local URLs, public URLs when configured, and a reminder about first-time remote pairing approval.
+
+## ⚙️ Runtime Notes
+
+- The stack uses PostgreSQL 18. Its data directory is bind-mounted at `data/postgres -> /var/lib/postgresql`, which matches the Postgres 18 image layout.
+- Dashboard container now includes a healthcheck (`/health`) so Compose health reflects dashboard readiness.
+- The gateway seeds `data/openclaw/config/openclaw.json5` from the repo bootstrap file on first boot only.
+- After first boot, runtime edits to `data/openclaw/config/openclaw.json5` persist across restarts.
+- The tradeoff is that later repo edits to `apps/gateway/config/openclaw.json5` do not automatically overwrite an existing runtime file. To re-seed from the repo version, remove `data/openclaw/config/openclaw.json5` and restart the gateway.
+- The gateway process listens on `0.0.0.0` inside the container, while Compose publishes it on `127.0.0.1:${GATEWAY_PORT}` on the host. This is expected and compatible with the optional `cloudflared` tunnel profile.
+- Public browser origins and trusted proxy CIDR are driven from `.env` through:
+  - `PUBLIC_GATEWAY_ORIGIN`
+  - `PUBLIC_DASHBOARD_ORIGIN`
+  - `PUBLIC_DASHBOARD_INSECURE_ORIGIN`
+  - `TRUSTED_PROXY_CIDR`
+- Runtime telemetry is split between:
+  - `dash:agents:status` (live heartbeat cache only; stale entries expire using `AGENT_HEARTBEAT_TTL_SECS`)
+  - `dash:agents:configured` (configured roster cache)
+
+### Runtime APIs
+
+- `GET /api/agents/status` returns configured-vs-live diff with stale markers and heartbeat age.
+- `GET /api/models/status` returns provider configuration status and configured model assignments per agent.
+- `GET /api/admin/runtime-status` returns backend runtime summary, gateway reachability, provider readiness, and backend log tail.
 
 ## 🧩 Autonomous Skills
 
@@ -118,7 +307,8 @@ When both are set, the workflow sends a Telegram summary with the check results,
 
 ## 📦 Handoff
 
-- **Repo-first handoff:** push the repo, copy `.env`, and start fresh with `make compose-up-build` on the next machine.
+- **Repo-first handoff:** push the repo, copy `.env`, and start fresh with `make launch` on the next machine.
+- **Tunnel handoff:** if the next machine should expose the tunnel too, copy `.env` with `CLOUDFLARED_TOKEN` set and use `make launch-tunnel`.
 - **Deploy guardrails:** run `make preflight-deploy` before first start on the new machine, and `make post-start-verify` right after startup.
 - **Resume exact runtime state:** export a sanitized snapshot with `make state-export`, move the archive plus `.env`, then restore with `make state-import ARCHIVE=tmp/council-state-YYYYMMDDTHHMMSSZ.tar.gz`.
 

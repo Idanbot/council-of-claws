@@ -5,7 +5,6 @@ pub struct Config {
     pub app_port: u16,
     pub redis_url: String,
     pub database_url: String,
-    pub mock_mode: bool,
     pub log_level: String,
     pub timezone: String,
 }
@@ -25,11 +24,6 @@ impl Config {
             "postgresql://council:council-dev-password@postgres:5432/council".to_string()
         });
 
-        let mock_mode = env::var("MOCK_MODE")
-            .ok()
-            .map(|v| v.to_lowercase() == "true" || v == "1")
-            .unwrap_or(false);
-
         let log_level = env::var("LOG_LEVEL").unwrap_or_else(|_| {
             "info".to_string()
         });
@@ -42,7 +36,6 @@ impl Config {
             app_port,
             redis_url,
             database_url,
-            mock_mode,
             log_level,
             timezone,
         }
@@ -59,12 +52,11 @@ mod tests {
             app_port: 8080,
             redis_url: "redis://localhost:6379".to_string(),
             database_url: "postgresql://localhost:5432/test".to_string(),
-            mock_mode: false,
             log_level: "info".to_string(),
             timezone: "UTC".to_string(),
         };
 
         assert_eq!(config.app_port, 8080);
-        assert!(!config.mock_mode);
+        assert_eq!(config.timezone, "UTC");
     }
 }

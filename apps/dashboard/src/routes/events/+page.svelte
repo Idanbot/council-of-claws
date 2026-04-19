@@ -1,15 +1,20 @@
 <script lang="ts">
-  import { auditLogs } from '$lib/stores';
+  import type { AuditEvent } from '$lib/models';
   import { fade, fly } from 'svelte/transition';
   import { flip } from 'svelte/animate';
-  import { getEvents } from '$lib/api';
+  import { getAudit } from '$lib/api';
   import { onMount } from 'svelte';
 
+  let auditLogs: AuditEvent[] = [];
+  let loading = true;
+
   async function fetchHistory() {
-    const { data } = await getEvents();
+    loading = true;
+    const { data } = await getAudit();
     if (data) {
-        // We could merge or replace here
+        auditLogs = data;
     }
+    loading = false;
   }
 
   onMount(fetchHistory);
@@ -38,7 +43,12 @@
     </div>
 
     <div class="divide-y divide-white/5">
-        {#each $auditLogs as log (log.id)}
+        {#if loading && auditLogs.length === 0}
+        <div class="py-32 text-center space-y-4">
+            <div class="text-xs font-black text-slate-600 uppercase tracking-[0.4em]">Loading audit stream</div>
+        </div>
+        {:else}
+        {#each auditLogs as log (log.id)}
         <div
             class="px-10 py-6 grid grid-cols-12 items-center gap-6 transition-colors hover:bg-white/[0.02]"
             in:fly={{ y: 10, duration: 300 }}
@@ -77,6 +87,7 @@
             <p class="text-[10px] font-bold text-slate-700 uppercase tracking-widest italic">Awaiting initial autonomous transmission...</p>
         </div>
         {/each}
+        {/if}
     </div>
   </div>
 </div>
