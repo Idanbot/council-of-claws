@@ -36,22 +36,57 @@ export interface AgentsStatusReport {
 
 export interface ProviderStatus {
     provider: string;
+    enabled: boolean;
     configured: boolean;
+    discovered: boolean;
+    status: string;
     via?: string | null;
+    base_url?: string | null;
+    model_count: number;
+    available_models: string[];
+    configured_model_refs: string[];
+    auth_profiles: string[];
+    issues: string[];
+}
+
+export interface OpenClawSnapshotMeta {
+    schema_version: number;
+    snapshot_fingerprint: string;
+    status: string;
+    generated_at: string;
+    last_success_at: string;
+    source_mtime?: string | null;
+    snapshot_age_seconds: number;
+}
+
+export interface OpenClawSnapshotHistorySummary {
+    snapshot_count: number;
+    latest_generated_at?: string | null;
+    latest_persisted_at?: string | null;
+    latest_snapshot_fingerprint?: string | null;
 }
 
 export interface ModelProviderStatus {
     generated_at: string;
+    snapshot: OpenClawSnapshotMeta;
     providers: ProviderStatus[];
     configured_agents: ConfiguredAgent[];
+    available_model_refs: string[];
+    invalid_model_refs: string[];
+    issues: string[];
 }
 
 export interface AdminRuntimeStatus {
     generated_at: string;
+    snapshot: OpenClawSnapshotMeta;
+    history: OpenClawSnapshotHistorySummary;
     gateway: { status: string; message?: string };
     providers: ProviderStatus[];
     backend_log_tail: string[];
     notes: string[];
+    openclaw_source_path: string;
+    runtime_state_available: boolean;
+    issues: string[];
 }
 
 export interface Task {
@@ -158,6 +193,7 @@ export interface CouncilRun {
 export interface Overview {
     system_health: SystemHealth;
     active_agents: Agent[];
+    configured_agents: ConfiguredAgent[];
     queue_summary: QueueSummary;
     recent_events: DashboardEvent[];
     council_summaries: CouncilRun[];
@@ -171,4 +207,37 @@ export interface UsageSummary {
     by_agent: Array<{ agent_id: string; tokens: number; cost_usd: number }>;
     by_model: Array<{ model_name: string; tokens: number; cost_usd: number }>;
     by_day: Array<{ day: string; tokens: number; cost_usd: number }>;
+}
+
+export type LogLevel = 'trace' | 'debug' | 'info' | 'warn' | 'error';
+
+export interface AnalyticsSummary {
+    providers: ProviderAnalytics[];
+    hourly_usage: UsageDataPoint[];
+}
+
+export interface ProviderAnalytics {
+    provider: string;
+    avg_latency_ms: number;
+    total_cost_usd: number;
+    total_tokens: number;
+    success_rate: number;
+}
+
+export interface UsageDataPoint {
+    timestamp: string;
+    tokens: number;
+    cost_usd: number;
+}
+
+export interface ModelUsage {
+    id: string;
+    agent_id: string;
+    model_name: string;
+    prompt_tokens: number;
+    completion_tokens: number;
+    total_tokens: number;
+    estimated_cost_usd: number;
+    latency_ms: number | null;
+    created_at: string;
 }

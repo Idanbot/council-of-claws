@@ -17,18 +17,38 @@ impl RedisReader {
         self.client.clone()
     }
 
-    pub async fn get_agents_status(&self) -> Result<Vec<Agent>, String> {
+    async fn get_json_value(&self, key: &str) -> Result<Option<Value>, String> {
         let mut conn = self.client.clone();
-        let data: Option<String> = conn.get("dash:agents:status")
+        let data: Option<String> = conn
+            .get(key)
             .await
             .map_err(|e| format!("Redis error: {}", e))?;
 
         let Some(data) = data else {
-            return Ok(Vec::new());
+            return Ok(None);
         };
 
-        let json: Value = serde_json::from_str(&data)
-            .map_err(|e| format!("JSON parse error: {}", e))?;
+        let json: Value =
+            serde_json::from_str(&data).map_err(|e| format!("JSON parse error: {}", e))?;
+
+        Ok(Some(json))
+    }
+
+    pub async fn get_openclaw_status(&self) -> Result<Option<OpenClawStatus>, String> {
+        let Some(json) = self.get_json_value("dash:openclaw:status").await? else {
+            return Ok(None);
+        };
+
+        serde_json::from_value(json)
+            .map(Some)
+            .map_err(|e| format!("JSON parse error: {}", e))
+    }
+
+    pub async fn get_agents_status(&self) -> Result<Vec<Agent>, String> {
+        let mut conn = self.client.clone();
+        let Some(json) = self.get_json_value("dash:agents:status").await? else {
+            return Ok(Vec::new());
+        };
 
         let agents = json
             .get("agents")
@@ -65,18 +85,15 @@ impl RedisReader {
     }
 
     pub async fn get_configured_agents(&self) -> Result<Vec<ConfiguredAgent>, String> {
-        let mut conn = self.client.clone();
-        let data: Option<String> = conn
-            .get("dash:agents:configured")
-            .await
-            .map_err(|e| format!("Redis error: {}", e))?;
+        if let Some(openclaw) = self.get_openclaw_status().await? {
+            if !openclaw.configured_agents.is_empty() {
+                return Ok(openclaw.configured_agents);
+            }
+        }
 
-        let Some(data) = data else {
+        let Some(json) = self.get_json_value("dash:agents:configured").await? else {
             return Ok(Vec::new());
         };
-
-        let json: Value = serde_json::from_str(&data)
-            .map_err(|e| format!("JSON parse error: {}", e))?;
 
         let agents = json
             .get("agents")
@@ -95,7 +112,8 @@ impl RedisReader {
 
     pub async fn get_queue_summary(&self) -> Result<QueueSummary, String> {
         let mut conn = self.client.clone();
-        let data: Option<String> = conn.get("dash:queue:summary")
+        let data: Option<String> = conn
+            .get("dash:queue:summary")
             .await
             .map_err(|e| format!("Redis error: {}", e))?;
 
@@ -113,22 +131,13 @@ impl RedisReader {
             });
         };
 
-        serde_json::from_str(&data)
-            .map_err(|e| format!("JSON parse error: {}", e))
+        serde_json::from_str(&data).map_err(|e| format!("JSON parse error: {}", e))
     }
 
     pub async fn get_recent_events(&self) -> Result<Vec<DashboardEvent>, String> {
-        let mut conn = self.client.clone();
-        let data: Option<String> = conn.get("dash:events:recent")
-            .await
-            .map_err(|e| format!("Redis error: {}", e))?;
-
-        let Some(data) = data else {
+        let Some(json) = self.get_json_value("dash:events:recent").await? else {
             return Ok(Vec::new());
         };
-
-        let json: Value = serde_json::from_str(&data)
-            .map_err(|e| format!("JSON parse error: {}", e))?;
 
         let events = json
             .get("events")
@@ -143,6 +152,15 @@ impl RedisReader {
         }
 
         Ok(result)
+    }
+
+    pub async fn set_queue_summary(&self, summary: &QueueSummary) -> Result<(), String> {
+        let mut conn = self.client.clone();
+        let json = serde_json::to_string(summary).map_err(|e| format!("JSON error: {}", e))?;
+        let _: redis::RedisResult<()> = conn
+            .set("dash:queue:summary", json)
+            .await;
+        Ok(())
     }
 }
 
@@ -172,5 +190,41 @@ mod tests {
 
         let agent: Agent = serde_json::from_str(json_str).unwrap();
         assert_eq!(agent.agent_id, "director");
+    }
+
+    #[tokio::test]
+    async fn test_redis_queue_summary_roundtrip() {
+        let redis_url = std::env::var("REDIS_URL").unwrap_or_else(|_| "redis://127.0.0.1:6379".to_string());
+        let client = match redis::Client::open(redis_url) {
+            Ok(c) => c,
+            Err(_) => return, // Skip if no redis
+        };
+
+        // Use a short timeout for the connection
+        let manager_future = ConnectionManager::new(client);
+        let manager = match tokio::time::timeout(std::time::Duration::from_millis(500), manager_future).await {
+            Ok(Ok(m)) => m,
+            _ => return, // Skip if timeout or error
+        };
+
+        let reader = RedisReader::new(manager);
+        let summary = QueueSummary {
+            pending_critical: 10,
+            pending_high: 20,
+            pending_normal: 30,
+            pending_low: 40,
+            in_progress: 50,
+            reviewing: 60,
+            blocked: 70,
+            completed: 80,
+            failed: 90,
+        };
+
+        if let Ok(_) = tokio::time::timeout(std::time::Duration::from_millis(500), reader.set_queue_summary(&summary)).await {
+            if let Ok(Ok(read_back)) = tokio::time::timeout(std::time::Duration::from_millis(500), reader.get_queue_summary()).await {
+                assert_eq!(read_back.pending_critical, 10);
+                assert_eq!(read_back.failed, 90);
+            }
+        }
     }
 }

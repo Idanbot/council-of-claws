@@ -11,8 +11,8 @@ pub struct ObsidianWriter {
 
 impl ObsidianWriter {
     pub fn new() -> Self {
-        let vault_path = env::var("OBSIDIAN_VAULT_PATH")
-            .unwrap_or_else(|_| "./data/obsidian".to_string());
+        let vault_path =
+            env::var("OBSIDIAN_VAULT_PATH").unwrap_or_else(|_| "./data/obsidian".to_string());
         ObsidianWriter {
             vault_path: PathBuf::from(vault_path),
         }
@@ -41,9 +41,9 @@ impl ObsidianWriter {
                 .map_err(|e| format!("failed to create task directory: {e}"))?;
         }
 
-        let mission_link = mission_id.map(|id| {
-            format!("\nPart of Mission: [[Missions/{}]]\n", id)
-        }).unwrap_or_default();
+        let mission_link = mission_id
+            .map(|id| format!("\nPart of Mission: [[Missions/{}]]\n", id))
+            .unwrap_or_default();
 
         let content = format!(
             "# Task: {}\n\nStatus: **{:?}**  \nTask ID: `{}`  \nPriority: **{:?}**  \nAssigned To: `{}`  \nCreated: {}  \nUpdated: {}  \n{}\n## Description\n\n{}\n\n## Audit Trail\n\nSee database for detailed event history.\n",
@@ -102,7 +102,8 @@ impl ObsidianWriter {
             let started = task.created_at;
             let completed = task.updated_at;
             let duration = completed.signed_duration_since(started);
-            let duration_str = format!("{}h {}m", duration.num_hours(), duration.num_minutes() % 60);
+            let duration_str =
+                format!("{}h {}m", duration.num_hours(), duration.num_minutes() % 60);
 
             // Use internal wiki link format for bidirectional support
             let wiki_link = format!("[[Tasks/{}]]", task.id);
@@ -119,9 +120,18 @@ impl ObsidianWriter {
             ));
         }
 
-        let completed = subtasks.iter().filter(|t| matches!(t.status, TaskStatus::Completed)).count();
-        let failed = subtasks.iter().filter(|t| matches!(t.status, TaskStatus::Failed)).count();
-        let cancelled = subtasks.iter().filter(|t| matches!(t.status, TaskStatus::Cancelled)).count();
+        let completed = subtasks
+            .iter()
+            .filter(|t| matches!(t.status, TaskStatus::Completed))
+            .count();
+        let failed = subtasks
+            .iter()
+            .filter(|t| matches!(t.status, TaskStatus::Failed))
+            .count();
+        let cancelled = subtasks
+            .iter()
+            .filter(|t| matches!(t.status, TaskStatus::Cancelled))
+            .count();
         let success_rate = if subtasks.is_empty() {
             0.0
         } else {
@@ -160,7 +170,6 @@ impl ObsidianWriter {
             mission_rel_path.replace(' ', "%20")
         ))
     }
-
 }
 
 fn format_local_ts(ts: DateTime<Utc>) -> String {

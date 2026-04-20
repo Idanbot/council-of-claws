@@ -13,8 +13,33 @@ vi.mock('$lib/api', () => ({
 	getModelsStatus: vi.fn(async () => ({
 		data: {
 			generated_at: new Date().toISOString(),
-			providers: [{ provider: 'openai', configured: true, via: 'OPENAI_API_KEY' }],
-			configured_agents: []
+			snapshot: {
+				schema_version: 1,
+				snapshot_fingerprint: 'abc123def456',
+				status: 'healthy',
+				generated_at: new Date().toISOString(),
+				last_success_at: new Date().toISOString(),
+				source_mtime: new Date().toISOString(),
+				snapshot_age_seconds: 4
+			},
+			providers: [{
+				provider: 'openai',
+				enabled: true,
+				configured: true,
+				discovered: false,
+				status: 'healthy',
+				via: 'config-plugin',
+				base_url: null,
+				model_count: 0,
+				available_models: [],
+				configured_model_refs: ['openai/gpt-5.4'],
+				auth_profiles: [],
+				issues: []
+			}],
+			configured_agents: [],
+			available_model_refs: ['codex/gpt-5.4'],
+			invalid_model_refs: [],
+			issues: []
 		}
 	})),
 	getAgentsStatus: vi.fn(async () => ({
@@ -30,10 +55,28 @@ vi.mock('$lib/api', () => ({
 	getAdminRuntimeStatus: vi.fn(async () => ({
 		data: {
 			generated_at: new Date().toISOString(),
+			snapshot: {
+				schema_version: 1,
+				snapshot_fingerprint: 'abc123def456',
+				status: 'healthy',
+				generated_at: new Date().toISOString(),
+				last_success_at: new Date().toISOString(),
+				source_mtime: new Date().toISOString(),
+				snapshot_age_seconds: 4
+			},
+			history: {
+				snapshot_count: 2,
+				latest_generated_at: new Date().toISOString(),
+				latest_persisted_at: new Date().toISOString(),
+				latest_snapshot_fingerprint: 'abc123def456'
+			},
 			gateway: { status: 'healthy', message: 'reachable' },
 			providers: [],
 			backend_log_tail: ['line-a', 'line-b'],
-			notes: []
+			notes: [],
+			openclaw_source_path: '/app/data/openclaw',
+			runtime_state_available: true,
+			issues: []
 		}
 	}))
 }));

@@ -6,7 +6,6 @@ import type {
     Agent,
     AgentsStatusReport,
     AuditEvent,
-    ConfiguredAgent,
     CouncilRun,
     DashboardEvent,
     DiagnosticsReport,
@@ -85,10 +84,6 @@ export async function getAgent(agentId: string) {
     return apiCall<{ agent?: Agent; runs?: unknown[]; usage?: unknown[] }>(`/agents/${agentId}`);
 }
 
-export async function getConfiguredAgents() {
-    return apiCall<ConfiguredAgent[]>('/agents/configured');
-}
-
 export async function getAgentsStatus() {
     return apiCall<AgentsStatusReport>('/agents/status');
 }
@@ -143,6 +138,10 @@ export async function getModelsStatus() {
 
 export async function getAdminRuntimeStatus() {
     return apiCall<AdminRuntimeStatus>('/admin/runtime-status');
+}
+
+export async function getAnalyticsSummary() {
+    return apiCall<AnalyticsSummary>('/analytics/summary');
 }
 
 // WebSocket connection

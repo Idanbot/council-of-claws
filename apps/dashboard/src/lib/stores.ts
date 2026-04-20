@@ -1,7 +1,6 @@
 import { writable, derived } from 'svelte/store';
-import type { Agent, DashboardEvent, Overview } from './models';
+import type { Agent, ConfiguredAgent, DashboardEvent, Overview } from './models';
 import { createWebSocket, getOverview } from './api';
-import { configuredAgents } from './configured-agents';
 
 export const systemState = writable<Overview | null>(null);
 export const streamEvents = writable<DashboardEvent[]>([]);
@@ -10,10 +9,23 @@ export const apiHealthy = writable(false);
 export const refreshing = writable(false);
 export const lastRefreshed = writable<Date>(new Date());
 
+function configuredToAgent(agent: ConfiguredAgent): Agent {
+    return {
+        agent_id: agent.agent_id,
+        state: 'idle',
+        current_task_id: null,
+        priority: agent.priority,
+        model: agent.primary_model,
+        last_heartbeat_ts: 0,
+        elapsed_seconds: 0
+    };
+}
+
 // Derived stores for easier access
 export const agents = derived(systemState, ($state) => {
     const liveAgents = $state?.active_agents || [];
-    return liveAgents.length > 0 ? liveAgents : configuredAgents;
+    if (liveAgents.length > 0) return liveAgents;
+    return ($state?.configured_agents || []).map(configuredToAgent);
 });
 export const activeTasks = derived(systemState, ($state) => {
     return [

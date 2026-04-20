@@ -10,6 +10,7 @@
     { href: '/agents', label: 'Agents', dot: 'bg-emerald-500' },
     { href: '/tasks', label: 'Tasks', dot: 'bg-amber-500' },
     { href: '/council', label: 'Council', dot: 'bg-purple-500' },
+    { href: '/performance', label: 'Performance', dot: 'bg-indigo-500' },
     { href: '/usage', label: 'Usage', dot: 'bg-blue-500' },
     { href: '/events', label: 'Audit Log', dot: 'bg-slate-500' },
     { href: '/system', label: 'System', dot: 'bg-rose-500' }

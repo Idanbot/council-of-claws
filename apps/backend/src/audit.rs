@@ -1,25 +1,40 @@
 use crate::models::AuditOperation;
 use crate::websocket_hub::WsHub;
-use sqlx::PgPool;
-use uuid::Uuid;
-use serde_json::json;
 use redis::aio::ConnectionManager;
 use redis::AsyncCommands;
+use serde_json::json;
+use sqlx::PgPool;
+use tokio::sync::mpsc;
+use uuid::Uuid;
 
 #[derive(Clone)]
 pub struct AuditService {
-    pool: PgPool,
-    redis: ConnectionManager,
-    ws_hub: WsHub,
+    tx: mpsc::Sender<AuditEventTask>,
+}
+
+pub struct AuditEventTask {
+    pub request_id: Option<String>,
+    pub agent_id: Option<String>,
+    pub operation: AuditOperation,
+    pub resource_type: Option<String>,
+    pub resource_id: Option<String>,
+    pub allowed: bool,
+    pub result: Option<String>,
+    pub reason: Option<String>,
+    pub metadata: Option<serde_json::Value>,
 }
 
 impl AuditService {
     pub fn new(pool: PgPool, redis: ConnectionManager, ws_hub: WsHub) -> Self {
-        AuditService { pool, redis, ws_hub }
-    }
+        let (tx, mut rx) = mpsc::channel::<AuditEventTask>(1024);
 
-    pub fn redis_connection(&self) -> ConnectionManager {
-        self.redis.clone()
+        tokio::spawn(async move {
+            while let Some(task) = rx.recv().await {
+                Self::process_log(&pool, &redis, &ws_hub, task).await;
+            }
+        });
+
+        AuditService { tx }
     }
 
     pub async fn log(
@@ -34,8 +49,31 @@ impl AuditService {
         reason: Option<&str>,
         metadata: Option<serde_json::Value>,
     ) {
+        let task = AuditEventTask {
+            request_id: request_id.map(|s| s.to_string()),
+            agent_id: agent_id.map(|s| s.to_string()),
+            operation,
+            resource_type: resource_type.map(|s| s.to_string()),
+            resource_id: resource_id.map(|s| s.to_string()),
+            allowed,
+            result: result.map(|s| s.to_string()),
+            reason: reason.map(|s| s.to_string()),
+            metadata,
+        };
+
+        if let Err(e) = self.tx.send(task).await {
+            tracing::error!("Failed to send audit event to worker: {}", e);
+        }
+    }
+
+    async fn process_log(
+        pool: &PgPool,
+        redis: &ConnectionManager,
+        ws_hub: &WsHub,
+        task: AuditEventTask,
+    ) {
         let id = format!("audit-{}", Uuid::new_v4());
-        let op_str = operation.to_string();
+        let op_str = task.operation.to_string();
 
         // 1. Persist to SQL
         let res = sqlx::query(
@@ -43,16 +81,16 @@ impl AuditService {
              VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)"
         )
         .bind(&id)
-        .bind(request_id)
-        .bind(agent_id)
+        .bind(&task.request_id)
+        .bind(&task.agent_id)
         .bind(&op_str)
-        .bind(resource_type)
-        .bind(resource_id)
-        .bind(allowed)
-        .bind(result)
-        .bind(reason)
-        .bind(&metadata)
-        .execute(&self.pool)
+        .bind(&task.resource_type)
+        .bind(&task.resource_id)
+        .bind(task.allowed)
+        .bind(&task.result)
+        .bind(&task.reason)
+        .bind(&task.metadata)
+        .execute(pool)
         .await;
 
         if let Err(e) = res {
@@ -63,27 +101,29 @@ impl AuditService {
         let event_payload = json!({
             "event_type": "audit",
             "id": id,
-            "agent_id": agent_id,
+            "agent_id": task.agent_id,
             "operation": op_str,
-            "resource_type": resource_type,
-            "resource_id": resource_id,
-            "allowed": allowed,
-            "result": result,
-            "level": if allowed { "info" } else { "error" },
-            "summary": reason.unwrap_or("audit event"),
+            "resource_type": task.resource_type,
+            "resource_id": task.resource_id,
+            "allowed": task.allowed,
+            "result": task.result,
+            "level": if task.allowed { "info" } else { "error" },
+            "summary": task.reason.as_deref().unwrap_or("audit event"),
             "stream_connection": "audit",
             "timestamp": chrono::Utc::now().timestamp(),
             "created_at": chrono::Utc::now()
         });
-        self.ws_hub.broadcast(event_payload.clone());
+        ws_hub.broadcast(event_payload.clone());
 
         // 3. Push to Redis Stream for durability/replay
-        let mut conn = self.redis.clone();
-        let _: redis::RedisResult<()> = conn.xadd(
-            "coc:events:audit",
-            "*",
-            &[("data", event_payload.to_string())]
-        ).await;
+        let mut conn = redis.clone();
+        let _: redis::RedisResult<()> = conn
+            .xadd(
+                "coc:events:audit",
+                "*",
+                &[("data", event_payload.to_string())],
+            )
+            .await;
 
         let mut recent_events: Vec<serde_json::Value> = conn
             .get::<_, Option<String>>("dash:events:recent")
@@ -91,19 +131,29 @@ impl AuditService {
             .ok()
             .flatten()
             .and_then(|data| serde_json::from_str::<serde_json::Value>(&data).ok())
-            .and_then(|json| json.get("events").and_then(|items| items.as_array()).cloned())
+            .and_then(|json| {
+                json.get("events")
+                    .and_then(|items| items.as_array())
+                    .cloned()
+            })
             .unwrap_or_default();
 
-        recent_events.insert(0, json!({
-            "level": if allowed { "info" } else { "error" },
-            "summary": reason.unwrap_or("audit event"),
-            "stream_connection": "audit",
-            "timestamp": chrono::Utc::now().timestamp(),
-        }));
+        recent_events.insert(
+            0,
+            json!({
+                "level": if task.allowed { "info" } else { "error" },
+                "summary": task.reason.as_deref().unwrap_or("audit event"),
+                "stream_connection": "audit",
+                "timestamp": chrono::Utc::now().timestamp(),
+            }),
+        );
         recent_events.truncate(25);
 
         let _: redis::RedisResult<()> = conn
-            .set("dash:events:recent", json!({ "events": recent_events }).to_string())
+            .set(
+                "dash:events:recent",
+                json!({ "events": recent_events }).to_string(),
+            )
             .await;
     }
 }

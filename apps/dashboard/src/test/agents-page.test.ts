@@ -3,20 +3,29 @@ import { describe, expect, it, vi } from 'vitest';
 import AgentsPage from '../routes/agents/+page.svelte';
 
 vi.mock('$lib/api', () => ({
-	getAgents: vi.fn(async () => ({
-		data: [],
+	getAgentsStatus: vi.fn(async () => ({
+		data: {
+			generated_at: new Date().toISOString(),
+			heartbeat_ttl_seconds: 120,
+			configured_count: 1,
+			live_count: 0,
+			stale_count: 0,
+			agents: [
+				{
+					configured: {
+						agent_id: 'director',
+						role: 'Director',
+						primary_model: 'google/gemini-3.1-pro-preview',
+						fallbacks: ['github-copilot/gpt-4o'],
+						priority: 'high'
+					},
+					live: null,
+					heartbeat_age_seconds: null,
+					status: 'configured'
+				}
+			]
+		},
 		error: undefined
-	})),
-	getConfiguredAgents: vi.fn(async () => ({
-		data: [
-			{
-				agent_id: 'director',
-				role: 'planner',
-				primary_model: 'google/gemini-3.1-pro-preview',
-				fallbacks: ['github-copilot/gpt-4o'],
-				priority: 'high'
-			}
-		]
 	}))
 }));
 

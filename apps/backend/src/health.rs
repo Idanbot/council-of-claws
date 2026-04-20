@@ -1,11 +1,12 @@
-use crate::models::{HealthResponse, ServiceHealth, HealthStatus};
+use crate::models::{HealthResponse, HealthStatus, ServiceHealth};
 use chrono::Utc;
 use redis::aio::ConnectionManager;
 use sqlx::PgPool;
 
 pub async fn check_redis(client: &ConnectionManager) -> ServiceHealth {
     let mut conn = client.clone();
-    let ping_result: Result<String, redis::RedisError> = redis::cmd("PING").query_async(&mut conn).await;
+    let ping_result: Result<String, redis::RedisError> =
+        redis::cmd("PING").query_async(&mut conn).await;
 
     match ping_result {
         Ok(_) => ServiceHealth {

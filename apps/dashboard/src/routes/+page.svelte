@@ -2,7 +2,6 @@
   import { systemState, agents, activeTasks, streamEvents, liveAgents } from '$lib/stores';
   import { fade, fly } from 'svelte/transition';
   import { flip } from 'svelte/animate';
-  import { configuredAgentLabels } from '$lib/configured-agents';
 
   $: backendStatus = $systemState?.system_health?.backend?.status;
   $: platformLabel =
@@ -20,6 +19,10 @@
     { label: 'Token Burn', value: `$${$systemState?.queue_summary.completed || 0}`, color: 'text-emerald-500' },
     { label: 'Platform', value: platformLabel, color: platformLabel === 'NOMINAL' ? 'text-white' : platformLabel === 'UNKNOWN' ? 'text-slate-400' : 'text-rose-400' }
   ];
+
+  function configuredRole(agentId: string, fallbackModel: string) {
+    return $systemState?.configured_agents?.find((agent) => agent.agent_id === agentId)?.role || fallbackModel;
+  }
 </script>
 
 <div class="space-y-12">
@@ -58,7 +61,7 @@
               </div>
               <div>
                 <div class="text-sm font-black text-white tracking-tight">{agent.agent_id}</div>
-                <div class="text-[10px] text-slate-500 uppercase tracking-widest mt-0.5">{configuredAgentLabels[agent.agent_id] || agent.model}</div>
+                <div class="text-[10px] text-slate-500 uppercase tracking-widest mt-0.5">{configuredRole(agent.agent_id, agent.model)}</div>
               </div>
             </div>
             <div class="text-right">

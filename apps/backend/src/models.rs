@@ -1,5 +1,62 @@
+use axum::{
+    http::StatusCode,
+    response::{IntoResponse, Response},
+    Json,
+};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use serde_json::json;
+use std::fmt;
+
+// ============ Error Handling ============
+
+#[derive(Debug)]
+pub enum AppError {
+    Database(String),
+    Redis(String),
+    Auth(String),
+    NotFound(String),
+    BadRequest(String),
+    Internal(String),
+    PermissionDenied(String),
+}
+
+impl IntoResponse for AppError {
+    fn into_response(self) -> Response {
+        let (status, code, message) = match self {
+            AppError::Database(m) => (StatusCode::INTERNAL_SERVER_ERROR, "DATABASE_ERROR", m),
+            AppError::Redis(m) => (StatusCode::INTERNAL_SERVER_ERROR, "REDIS_ERROR", m),
+            AppError::Auth(m) => (StatusCode::UNAUTHORIZED, "AUTH_FAILED", m),
+            AppError::NotFound(m) => (StatusCode::NOT_FOUND, "NOT_FOUND", m),
+            AppError::BadRequest(m) => (StatusCode::BAD_REQUEST, "BAD_REQUEST", m),
+            AppError::Internal(m) => (StatusCode::INTERNAL_SERVER_ERROR, "INTERNAL_ERROR", m),
+            AppError::PermissionDenied(m) => (StatusCode::FORBIDDEN, "PERMISSION_DENIED", m),
+        };
+
+        let body = Json(json!({
+            "code": code,
+            "message": message,
+        }));
+
+        (status, body).into_response()
+    }
+}
+
+impl fmt::Display for AppError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            AppError::Database(m) => write!(f, "Database error: {}", m),
+            AppError::Redis(m) => write!(f, "Redis error: {}", m),
+            AppError::Auth(m) => write!(f, "Auth error: {}", m),
+            AppError::NotFound(m) => write!(f, "Not found: {}", m),
+            AppError::BadRequest(m) => write!(f, "Bad request: {}", m),
+            AppError::Internal(m) => write!(f, "Internal error: {}", m),
+            AppError::PermissionDenied(m) => write!(f, "Permission denied: {}", m),
+        }
+    }
+}
+
+impl std::error::Error for AppError {}
 
 // ============ Health & Status ============
 
@@ -17,8 +74,9 @@ pub struct ServiceHealth {
     pub message: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, sqlx::Type)]
 #[serde(rename_all = "lowercase")]
+#[sqlx(type_name = "text", rename_all = "lowercase")]
 pub enum HealthStatus {
     Healthy,
     Degraded,
@@ -65,8 +123,9 @@ pub struct AgentsStatusReport {
     pub agents: Vec<AgentStatusSnapshot>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, sqlx::Type)]
 #[serde(rename_all = "snake_case")]
+#[sqlx(type_name = "text", rename_all = "snake_case")]
 pub enum AgentState {
     Idle,
     Working,
@@ -78,7 +137,7 @@ pub enum AgentState {
 
 // ============ Task Related ============
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
 pub struct Task {
     pub id: String,
     pub title: String,
@@ -90,8 +149,9 @@ pub struct Task {
     pub blocked_reason: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, sqlx::Type)]
 #[serde(rename_all = "snake_case")]
+#[sqlx(type_name = "text", rename_all = "snake_case")]
 pub enum TaskPriority {
     Critical,
     High,
@@ -99,8 +159,9 @@ pub enum TaskPriority {
     Low,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, sqlx::Type)]
 #[serde(rename_all = "snake_case")]
+#[sqlx(type_name = "text", rename_all = "snake_case")]
 pub enum TaskStatus {
     Pending,
     InProgress,
@@ -111,14 +172,15 @@ pub enum TaskStatus {
     Cancelled,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, sqlx::Type)]
 #[serde(rename_all = "snake_case")]
+#[sqlx(type_name = "text", rename_all = "snake_case")]
 pub enum MissionStatus {
     Active,
     Closed,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
 pub struct Mission {
     pub id: String,
     pub root_task_id: String,
@@ -189,15 +251,33 @@ pub struct MissionCloseResponse {
     pub summary: MissionCloseSummary,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, sqlx::Type)]
+#[serde(rename_all = "lowercase")]
+#[sqlx(type_name = "text", rename_all = "lowercase")]
+pub enum CouncilPhase {
+    Debating,
+    Voting,
+    Concluded,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct HeartbeatRequest {
     pub status: String,
     pub current_task_id: Option<String>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ReportUsageRequest {
+    pub model_name: String,
+    pub prompt_tokens: i32,
+    pub completion_tokens: i32,
+    pub latency_ms: i64,
+    pub estimated_cost_usd: Option<f64>,
+}
+
 // ============ Agent Runs ============
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
 pub struct AgentRun {
     pub id: String,
     pub agent_id: String,
@@ -210,7 +290,7 @@ pub struct AgentRun {
 
 // ============ Model Usage ============
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
 pub struct ModelUsage {
     pub id: String,
     pub agent_id: String,
@@ -219,7 +299,30 @@ pub struct ModelUsage {
     pub completion_tokens: i32,
     pub total_tokens: i32,
     pub estimated_cost_usd: f64,
+    pub latency_ms: Option<i64>,
     pub created_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AnalyticsSummary {
+    pub providers: Vec<ProviderAnalytics>,
+    pub hourly_usage: Vec<UsageDataPoint>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProviderAnalytics {
+    pub provider: String,
+    pub avg_latency_ms: f64,
+    pub total_cost_usd: f64,
+    pub total_tokens: i32,
+    pub success_rate: f64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UsageDataPoint {
+    pub timestamp: DateTime<Utc>,
+    pub tokens: i32,
+    pub cost_usd: f64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -254,13 +357,14 @@ pub struct UsageByDay {
 
 // ============ Council Related ============
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
 pub struct CouncilRun {
     pub id: String,
     pub title: String,
     pub status: String,
     pub phase: CouncilPhase,
     pub director_agent: String,
+    #[sqlx(default)]
     pub participants: Vec<String>,
     pub ruling_summary: Option<String>,
     pub confidence: Option<f64>,
@@ -269,12 +373,33 @@ pub struct CouncilRun {
     pub updated_at: DateTime<Utc>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, sqlx::Type)]
 #[serde(rename_all = "lowercase")]
-pub enum CouncilPhase {
-    Debating,
-    Voting,
-    Concluded,
+#[sqlx(type_name = "text", rename_all = "lowercase")]
+pub enum LogLevel {
+    Trace,
+    Debug,
+    Info,
+    Warn,
+    Error,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LogEvent {
+    pub agent_id: String,
+    pub level: LogLevel,
+    pub message: String,
+    pub target: Option<String>,
+    pub timestamp: DateTime<Utc>,
+    pub metadata: Option<serde_json::Value>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LogRequest {
+    pub level: LogLevel,
+    pub message: String,
+    pub target: Option<String>,
+    pub metadata: Option<serde_json::Value>,
 }
 
 // ============ Events ============
@@ -349,6 +474,7 @@ pub struct QueueSummary {
 pub struct Overview {
     pub system_health: SystemHealth,
     pub active_agents: Vec<Agent>,
+    pub configured_agents: Vec<ConfiguredAgent>,
     pub queue_summary: QueueSummary,
     pub recent_events: Vec<DashboardEvent>,
     pub council_summaries: Vec<CouncilRun>,
@@ -414,7 +540,7 @@ pub struct SecretRotateResponse {
 
 // ============ Audit Related ============
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
 pub struct AuditEvent {
     pub id: String,
     pub request_id: Option<String>,
@@ -447,28 +573,85 @@ pub struct DiagnosticsReport {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProviderStatus {
     pub provider: String,
+    pub enabled: bool,
     pub configured: bool,
+    pub discovered: bool,
+    pub status: String,
     pub via: Option<String>,
+    pub base_url: Option<String>,
+    pub model_count: usize,
+    pub available_models: Vec<String>,
+    pub configured_model_refs: Vec<String>,
+    pub auth_profiles: Vec<String>,
+    pub issues: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ModelProviderStatus {
     pub generated_at: DateTime<Utc>,
+    pub snapshot: OpenClawSnapshotMeta,
     pub providers: Vec<ProviderStatus>,
     pub configured_agents: Vec<ConfiguredAgent>,
+    pub available_model_refs: Vec<String>,
+    pub invalid_model_refs: Vec<String>,
+    pub issues: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct OpenClawStatus {
+    pub schema_version: i32,
+    pub snapshot_fingerprint: String,
+    pub status: String,
+    pub generated_at: DateTime<Utc>,
+    pub last_success_at: DateTime<Utc>,
+    pub source_path: String,
+    pub config_path: String,
+    pub source_mtime: Option<DateTime<Utc>>,
+    pub runtime_state_available: bool,
+    pub configured_agents: Vec<ConfiguredAgent>,
+    pub providers: Vec<ProviderStatus>,
+    pub available_model_refs: Vec<String>,
+    pub configured_model_refs: Vec<String>,
+    pub invalid_model_refs: Vec<String>,
+    pub issues: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AdminRuntimeStatus {
     pub generated_at: DateTime<Utc>,
+    pub snapshot: OpenClawSnapshotMeta,
+    pub history: OpenClawSnapshotHistorySummary,
     pub gateway: ServiceMetrics,
     pub providers: Vec<ProviderStatus>,
     pub backend_log_tail: Vec<String>,
     pub notes: Vec<String>,
+    pub openclaw_source_path: String,
+    pub runtime_state_available: bool,
+    pub issues: Vec<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct OpenClawSnapshotMeta {
+    pub schema_version: i32,
+    pub snapshot_fingerprint: String,
+    pub status: String,
+    pub generated_at: DateTime<Utc>,
+    pub last_success_at: DateTime<Utc>,
+    pub source_mtime: Option<DateTime<Utc>>,
+    pub snapshot_age_seconds: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct OpenClawSnapshotHistorySummary {
+    pub snapshot_count: i64,
+    pub latest_generated_at: Option<DateTime<Utc>>,
+    pub latest_persisted_at: Option<DateTime<Utc>>,
+    pub latest_snapshot_fingerprint: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, sqlx::Type)]
 #[serde(rename_all = "snake_case")]
+#[sqlx(type_name = "text", rename_all = "snake_case")]
 pub enum AuditOperation {
     TaskCreate,
     TaskClaim,

@@ -1,36 +1,33 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { fade, scale } from 'svelte/transition';
-  import { getAgents, getConfiguredAgents } from '$lib/api';
-  import type { Agent, ConfiguredAgent } from '$lib/models';
-  import { configuredAgents, configuredAgentLabels } from '$lib/configured-agents';
+  import { getAgentsStatus } from '$lib/api';
+  import type { Agent, AgentStatusSnapshot, ConfiguredAgent } from '$lib/models';
+  import LogConsole from '$lib/LogConsole.svelte';
 
   let liveAgents: Agent[] = [];
   let configured: ConfiguredAgent[] = [];
+  let snapshots: AgentStatusSnapshot[] = [];
   let loading = true;
   let error: string | null = null;
   let syncedAt = '';
 
+  function configuredRole(agentId: string, fallback: string) {
+    return snapshots.find((snapshot) => snapshot.configured.agent_id === agentId)?.configured.role || fallback;
+  }
+
   async function fetchAgents() {
     loading = true;
     error = null;
-    const [{ data, error: apiError }, { data: configuredData }] = await Promise.all([
-      getAgents(),
-      getConfiguredAgents()
-    ]);
+    const { data, error: apiError } = await getAgentsStatus();
     if (apiError) {
       error = apiError.message;
     }
-    liveAgents = (data || []).filter((agent) => agent.last_heartbeat_ts > 0);
-    configured = configuredData && configuredData.length > 0
-      ? configuredData
-      : configuredAgents.map((agent) => ({
-          agent_id: agent.agent_id,
-          role: configuredAgentLabels[agent.agent_id] || 'configured',
-          primary_model: agent.model,
-          fallbacks: [],
-          priority: agent.priority
-        }));
+    snapshots = data?.agents || [];
+    configured = snapshots.map((snapshot) => snapshot.configured);
+    liveAgents = snapshots
+      .filter((snapshot) => snapshot.live && snapshot.status === 'live')
+      .map((snapshot) => snapshot.live as Agent);
     syncedAt = new Date().toLocaleTimeString([], { hour12: false });
     loading = false;
   }
@@ -90,7 +87,7 @@
                 </div>
                 <div>
                   <h3 class="text-lg font-black text-white tracking-tight uppercase">{agent.agent_id}</h3>
-                  <p class="text-[9px] uppercase tracking-[0.2em] text-slate-500 font-bold mt-1">{configuredAgentLabels[agent.agent_id] || agent.model}</p>
+                  <p class="text-[9px] uppercase tracking-[0.2em] text-slate-500 font-bold mt-1">{configuredRole(agent.agent_id, agent.model)}</p>
                 </div>
               </div>
               <div class="flex flex-col items-end">
@@ -165,3 +162,11 @@
     </div>
   </div>
 </div>
+
+  <div class="space-y-6 pt-10">
+    <div class="section-title">
+      <div class="h-1 w-4 bg-emerald-500 rounded-full"></div>
+      Global Log Stream
+    </div>
+    <LogConsole />
+  </div>

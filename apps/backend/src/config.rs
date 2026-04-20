@@ -7,6 +7,7 @@ pub struct Config {
     pub database_url: String,
     pub log_level: String,
     pub timezone: String,
+    pub openclaw_state_path: String,
 }
 
 impl Config {
@@ -16,21 +17,19 @@ impl Config {
             .and_then(|v| v.parse().ok())
             .unwrap_or(8080);
 
-        let redis_url = env::var("REDIS_URL").unwrap_or_else(|_| {
-            "redis://redis:6379".to_string()
-        });
+        let redis_url = env::var("REDIS_URL").unwrap_or_else(|_| "redis://redis:6379".to_string());
 
         let database_url = env::var("DATABASE_URL").unwrap_or_else(|_| {
             "postgresql://council:council-dev-password@postgres:5432/council".to_string()
         });
 
-        let log_level = env::var("LOG_LEVEL").unwrap_or_else(|_| {
-            "info".to_string()
-        });
+        let log_level = env::var("LOG_LEVEL").unwrap_or_else(|_| "info".to_string());
 
-        let timezone = env::var("TIMEZONE").unwrap_or_else(|_| {
-            env::var("TZ").unwrap_or_else(|_| "UTC".to_string())
-        });
+        let timezone = env::var("TIMEZONE")
+            .unwrap_or_else(|_| env::var("TZ").unwrap_or_else(|_| "UTC".to_string()));
+
+        let openclaw_state_path =
+            env::var("OPENCLAW_STATE_PATH").unwrap_or_else(|_| "/app/data/openclaw".to_string());
 
         Config {
             app_port,
@@ -38,6 +37,7 @@ impl Config {
             database_url,
             log_level,
             timezone,
+            openclaw_state_path,
         }
     }
 }
@@ -54,6 +54,7 @@ mod tests {
             database_url: "postgresql://localhost:5432/test".to_string(),
             log_level: "info".to_string(),
             timezone: "UTC".to_string(),
+            openclaw_state_path: "/tmp/openclaw".to_string(),
         };
 
         assert_eq!(config.app_port, 8080);

@@ -146,18 +146,58 @@
         Providers & Models
       </div>
       <div class="glass-card p-6 space-y-4">
+        <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <div class="rounded-xl border border-white/10 bg-white/[0.02] px-4 py-3">
+            <div class="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">Schema</div>
+            <div class="mt-2 text-lg font-black text-white">v{models.snapshot.schema_version}</div>
+          </div>
+          <div class="rounded-xl border border-white/10 bg-white/[0.02] px-4 py-3">
+            <div class="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">Snapshot</div>
+            <div class="mt-2 text-lg font-black {models.snapshot.status === 'healthy' ? 'text-emerald-400' : models.snapshot.status === 'error' ? 'text-rose-400' : 'text-amber-400'}">{models.snapshot.status}</div>
+          </div>
+          <div class="rounded-xl border border-white/10 bg-white/[0.02] px-4 py-3">
+            <div class="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">Age</div>
+            <div class="mt-2 text-lg font-black text-white">{models.snapshot.snapshot_age_seconds}s</div>
+          </div>
+          <div class="rounded-xl border border-white/10 bg-white/[0.02] px-4 py-3">
+            <div class="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">Fingerprint</div>
+            <div class="mt-2 text-[11px] font-bold text-slate-300 break-all">{models.snapshot.snapshot_fingerprint.slice(0, 12)}</div>
+          </div>
+        </div>
         <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {#each models.providers as provider}
             <div class="rounded-xl border border-white/10 bg-white/[0.02] px-4 py-3">
               <div class="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">{provider.provider}</div>
-              <div class="mt-2 flex items-center justify-between">
-                <span class="status-pill {provider.configured ? 'status-pill-ok' : 'status-pill-warn'}">
-                  {provider.configured ? 'configured' : 'missing'}
+              <div class="mt-2 flex items-center justify-between gap-3">
+                <span class="status-pill {provider.status === 'healthy' || provider.status === 'configured' ? 'status-pill-ok' : provider.status === 'disabled' ? 'status-pill-info' : 'status-pill-warn'}">
+                  {provider.status}
                 </span>
                 <span class="text-[10px] font-bold text-slate-400">{provider.via || 'n/a'}</span>
               </div>
+              <div class="mt-3 text-[10px] font-bold uppercase tracking-widest text-slate-500">
+                {provider.model_count} runtime models
+              </div>
+              <div class="mt-3 text-[10px] text-slate-400 break-words">
+                {(provider.available_models.slice(0, 4).join(', ')) || 'No runtime-discovered models'}
+              </div>
+              {#if provider.issues.length > 0}
+                <div class="mt-3 text-[10px] text-amber-400 break-words">
+                  {provider.issues.filter((issue) => !issue.startsWith('invalid-model-ref:')).join(' | ')}
+                </div>
+              {/if}
             </div>
           {/each}
+        </div>
+        <div class="rounded-xl border border-white/10 bg-black/30 p-4">
+          <div class="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">Available Model Refs</div>
+          <div class="mt-2 text-[11px] text-slate-300 break-words">
+            {models.available_model_refs.join(', ') || 'No runtime model refs discovered'}
+          </div>
+          {#if models.invalid_model_refs.length > 0}
+            <div class="mt-3 text-[10px] font-bold uppercase tracking-widest text-amber-400">
+              Invalid refs: {models.invalid_model_refs.join(', ')}
+            </div>
+          {/if}
         </div>
       </div>
     </section>
@@ -205,6 +245,37 @@
           </span>
         </div>
         <div class="text-[11px] text-slate-300">{runtime.gateway.message}</div>
+        <div class="text-[10px] font-bold uppercase tracking-widest text-slate-500">
+          OpenClaw source: {runtime.openclaw_source_path}
+        </div>
+        <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <div class="rounded-xl border border-white/10 bg-white/[0.02] px-4 py-3">
+            <div class="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">Persisted Snapshots</div>
+            <div class="mt-2 text-lg font-black text-white">{runtime.history.snapshot_count}</div>
+          </div>
+          <div class="rounded-xl border border-white/10 bg-white/[0.02] px-4 py-3">
+            <div class="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">Snapshot Age</div>
+            <div class="mt-2 text-lg font-black text-white">{runtime.snapshot.snapshot_age_seconds}s</div>
+          </div>
+          <div class="rounded-xl border border-white/10 bg-white/[0.02] px-4 py-3">
+            <div class="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">Latest Persisted</div>
+            <div class="mt-2 text-[11px] font-bold text-slate-300">
+              {runtime.history.latest_persisted_at ? new Date(runtime.history.latest_persisted_at).toLocaleTimeString([], { hour12: false }) : 'n/a'}
+            </div>
+          </div>
+          <div class="rounded-xl border border-white/10 bg-white/[0.02] px-4 py-3">
+            <div class="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">Fingerprint</div>
+            <div class="mt-2 text-[11px] font-bold text-slate-300 break-all">{runtime.snapshot.snapshot_fingerprint.slice(0, 12)}</div>
+          </div>
+        </div>
+        <div class="text-[10px] font-bold uppercase tracking-widest {runtime.runtime_state_available ? 'text-emerald-400' : 'text-amber-400'}">
+          Runtime state: {runtime.runtime_state_available ? 'available' : 'missing'}
+        </div>
+        {#if runtime.issues.length > 0}
+          <div class="rounded-xl border border-amber-500/20 bg-amber-500/5 p-3 text-[10px] text-amber-200">
+            {runtime.issues.join(' | ')}
+          </div>
+        {/if}
         <div class="space-y-2">
           <div class="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">Backend Log Tail</div>
           <pre class="max-h-64 overflow-auto rounded-xl border border-white/10 bg-black/40 p-3 text-[10px] text-slate-300">{runtime.backend_log_tail.join('\n') || 'No backend logs yet'}</pre>

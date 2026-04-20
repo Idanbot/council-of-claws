@@ -83,6 +83,7 @@ services:
       TZ: ${TIMEZONE:-UTC}
       DATABASE_URL: ${DATABASE_URL:-postgresql://${POSTGRES_USER:-council}:${POSTGRES_PASSWORD:-council-dev-password}@postgres:5432/${POSTGRES_DB:-council}}
       OBSIDIAN_VAULT_PATH: /app/data/obsidian
+      OPENCLAW_STATE_PATH: /app/data/openclaw
     depends_on:
       redis:
         condition: service_healthy
@@ -96,6 +97,7 @@ services:
       - "8080"
     volumes:
       - ../../data/obsidian:/app/data/obsidian
+      - ../../data/openclaw:/app/data/openclaw:ro
       - ../../data/workspace:/app/data/workspace
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8080/api/health >/dev/null 2>&1"]
