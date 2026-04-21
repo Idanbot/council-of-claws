@@ -61,13 +61,13 @@
       <h3 class="text-[10px] font-black uppercase tracking-widest text-slate-400">Live Console</h3>
     </div>
     <div class="flex items-center gap-4">
-      <input 
-        type="text" 
-        bind:value={filter} 
-        placeholder="Filter logs..." 
+      <input
+        type="text"
+        bind:value={filter}
+        placeholder="Filter logs..."
         class="bg-white/5 border border-white/10 rounded px-3 py-1 text-[10px] text-slate-300 focus:outline-none focus:border-indigo-500/50 w-48"
       />
-      <button 
+      <button
         on:click={() => logs = []}
         class="text-[9px] font-bold text-slate-500 hover:text-slate-300 uppercase tracking-tighter"
       >
@@ -83,7 +83,7 @@
     </div>
   </div>
 
-  <div 
+  <div
     bind:this={scrollContainer}
     class="flex-1 overflow-y-auto p-6 font-mono text-[11px] leading-relaxed selection:bg-indigo-500/30"
   >

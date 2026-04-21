@@ -14,7 +14,7 @@
           <h4 class="text-[10px] font-black uppercase tracking-widest text-slate-500 group-hover:text-indigo-400 transition-colors">{p.provider}</h4>
           <div class="h-1.5 w-1.5 rounded-full {p.avg_latency_ms < 1000 ? 'bg-emerald-500 shadow-[0_0_8px_#10b981]' : 'bg-amber-500 shadow-[0_0_8px_#f59e0b]'}"></div>
         </div>
-        
+
         <div class="mt-6 flex items-baseline gap-2">
           <span class="text-2xl font-black text-white tracking-tighter">{p.avg_latency_ms.toFixed(0)}</span>
           <span class="text-[9px] font-bold text-slate-500 uppercase tracking-widest">ms avg</span>
@@ -39,7 +39,7 @@
       <div class="h-1 w-4 bg-indigo-500 rounded-full"></div>
       Latency Benchmarks
     </div>
-    
+
     <div class="space-y-6">
       {#each sortedByLatency as p}
         <div class="space-y-2">
@@ -48,8 +48,8 @@
             <span class="text-slate-300">{p.avg_latency_ms.toFixed(1)}ms</span>
           </div>
           <div class="h-1.5 w-full bg-white/5 rounded-full overflow-hidden">
-            <div 
-              class="h-full bg-gradient-to-r from-indigo-500 to-emerald-500 transition-all duration-1000" 
+            <div
+              class="h-full bg-gradient-to-r from-indigo-500 to-emerald-500 transition-all duration-1000"
               style="width: {Math.min(100, (p.avg_latency_ms / 3000) * 100)}%"
             ></div>
           </div>

@@ -26,6 +26,9 @@ vi.mock('$lib/api', () => ({
 			]
 		},
 		error: undefined
+	})),
+	createWebSocket: vi.fn(() => ({
+		close: vi.fn()
 	}))
 }));
 

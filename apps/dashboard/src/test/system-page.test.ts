@@ -78,6 +78,9 @@ vi.mock('$lib/api', () => ({
 			runtime_state_available: true,
 			issues: []
 		}
+	})),
+	createWebSocket: vi.fn(() => ({
+		close: vi.fn()
 	}))
 }));
 

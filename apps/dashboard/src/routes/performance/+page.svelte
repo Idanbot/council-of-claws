@@ -70,8 +70,8 @@
             <div class="w-full space-y-4">
               <div class="flex justify-between items-end h-32 gap-1 px-4">
                 {#each summary.hourly_usage.slice(-24) as point}
-                  <div 
-                    class="bg-indigo-500/40 hover:bg-indigo-400/60 transition-all rounded-t-sm flex-1 group relative" 
+                  <div
+                    class="bg-indigo-500/40 hover:bg-indigo-400/60 transition-all rounded-t-sm flex-1 group relative"
                     style="height: {Math.max(10, (point.tokens / Math.max(...summary.hourly_usage.map(p => p.tokens))) * 100)}%"
                   >
                     <div class="absolute -top-10 left-1/2 -translate-x-1/2 bg-slate-900 border border-white/10 rounded px-2 py-1 text-[8px] text-white opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-10">

@@ -397,7 +397,7 @@ async fn usage_report_handler(
 
     let usage_id = format!("usage-{}", uuid::Uuid::new_v4());
     let total_tokens = payload.prompt_tokens + payload.completion_tokens;
-    
+
     // Simple cost estimation if not provided
     let cost = payload.estimated_cost_usd.unwrap_or_else(|| {
         (total_tokens as f64) * 0.000002 // Default fallback cost
@@ -448,7 +448,7 @@ async fn analytics_summary_handler(
                 .filter(|u| u.model_name.starts_with(&name))
                 .map(|u| u.estimated_cost_usd)
                 .sum();
-            
+
             ProviderAnalytics {
                 provider: name,
                 avg_latency_ms: if lat_count > 0.0 { total_lat / lat_count } else { 0.0 },
@@ -476,7 +476,7 @@ async fn analytics_summary_handler(
             cost_usd: cost,
         })
         .collect();
-    
+
     hourly_usage.sort_by_key(|p| p.timestamp);
 
     Ok(Json(AnalyticsSummary {
