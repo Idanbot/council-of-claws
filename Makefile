@@ -61,7 +61,7 @@ format: backend-fmt ## Apply formatting
 
 format-check: backend-fmt-check ## Verify formatting without changing files
 
-ci: check-all ## Alias for CI-oriented full check target
+ci: check format-check lint smoke ## Run comprehensive quality gate (checks, lint, smoke tests) to prepare for CI/CD
 
 backend-check: ## Compile-check backend
 	cargo check --manifest-path "$(BACKEND_DIR)/Cargo.toml"
