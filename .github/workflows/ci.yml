@@ -288,6 +288,8 @@ jobs:
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
   publish-dashboard:
     runs-on: ubuntu-latest
@@ -334,6 +336,8 @@ jobs:
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
   publish-gateway:
     runs-on: ubuntu-latest
@@ -382,6 +386,8 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
             OPENCLAW_BASE_IMAGE=ghcr.io/openclaw/openclaw@sha256:9d5f1dfbd5deedc37706c78f745b958ffbe9b4f20840cfb4d49c617a50326902
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
   notify:
     name: Notify Telegram (Summary)
