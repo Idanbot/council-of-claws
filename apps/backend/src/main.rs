@@ -14,8 +14,8 @@ use audit::AuditService;
 use config::Config;
 use metrics_exporter_prometheus::PrometheusBuilder;
 use models::{
-    ConfiguredAgent, ContainerMetrics, DashboardEvent, HostMetrics, ServiceMetrics,
-    SystemHealth,
+    AppError, ConfiguredAgent, ContainerMetrics, DashboardEvent, HostMetrics, ServiceMetrics,
+    SystemHealth, Task,
 };
 use obsidian_writer::ObsidianWriter;
 use openclaw::OpenClawReader;
@@ -30,6 +30,72 @@ use summary_builder::SummaryBuilder;
 use tokio::time::{self, Duration};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
 use websocket_hub::WsHub;
+
+struct TaskPriorityOrchestrator {
+    postgres_reader: PostgresReader,
+    ws_hub: websocket_hub::WsHub,
+}
+
+impl TaskPriorityOrchestrator {
+    fn new(postgres_reader: PostgresReader, ws_hub: websocket_hub::WsHub) -> Self {
+        Self {
+            postgres_reader,
+            ws_hub,
+        }
+    }
+
+    async fn run(&self) {
+        let mut interval = tokio::time::interval(Duration::from_secs(60));
+        loop {
+            interval.tick().await;
+            if let Err(e) = self.orchestrate().await {
+                tracing::error!("Orchestration loop error: {}", e);
+            }
+        }
+    }
+
+    async fn orchestrate(&self) -> Result<(), AppError> {
+        // 1. Fetch pending tasks sorted by priority and age
+        let tasks = sqlx::query_as::<_, Task>(
+            "SELECT id, title, priority, status, owner_agent, created_at, updated_at, blocked_reason 
+             FROM tasks 
+             WHERE status = 'pending' 
+             ORDER BY 
+                CASE 
+                    WHEN priority = 'critical' THEN 0 
+                    WHEN priority = 'high' THEN 1 
+                    WHEN priority = 'normal' THEN 2 
+                    WHEN priority = 'low' THEN 3 
+                    ELSE 4 
+                END ASC, 
+                created_at ASC 
+             LIMIT 10"
+        )
+        .fetch_all(&self.postgres_reader.pool())
+        .await
+        .map_err(|e| AppError::Database(e.to_string()))?;
+
+        if tasks.is_empty() {
+            return Ok(());
+        }
+
+        // 2. Broadcast a "priority nudge" to the WebSocket hub
+        // Agents or the dashboard can listen for this to know what to work on next
+        let nudge = serde_json::json!({
+            "event_type": "priority_nudge",
+            "top_tasks": tasks.iter().map(|t| serde_json::json!({
+                "id": t.id,
+                "title": t.title,
+                "priority": t.priority,
+                "target": t.owner_agent
+            })).collect::<Vec<_>>(),
+            "timestamp": chrono::Utc::now()
+        });
+
+        self.ws_hub.broadcast(nudge);
+        Ok(())
+    }
+}
 
 #[tokio::main]
 async fn main() {
@@ -161,7 +227,13 @@ async fn main() {
     });
 
     // Create router
-    let router = create_routes(state);
+    let router = create_routes(state.clone());
+
+    // Start priority orchestrator
+    let orchestrator = TaskPriorityOrchestrator::new(state.postgres_reader.clone(), state.ws_hub.clone());
+    tokio::spawn(async move {
+        orchestrator.run().await;
+    });
 
     // Start server
     let addr = SocketAddr::from(([0, 0, 0, 0], config.app_port));

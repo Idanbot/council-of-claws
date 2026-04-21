@@ -307,6 +307,65 @@ impl PostgresReader {
         })
     }
 
+    pub async fn claim_task(&self, task_id: &str, agent_id: &str) -> Result<(), AppError> {
+        sqlx::query(
+            "UPDATE tasks SET status = 'in_progress', owner_agent = $1, started_at = NOW(), updated_at = NOW() WHERE id = $2"
+        )
+        .bind(agent_id)
+        .bind(task_id)
+        .execute(&self.pool)
+        .await
+        .map_err(|e| AppError::Database(e.to_string()))?;
+        Ok(())
+    }
+
+    pub async fn complete_task(&self, task_id: &str, notes: Option<&str>) -> Result<(), AppError> {
+        sqlx::query(
+            "UPDATE tasks SET status = 'completed', completed_at = NOW(), updated_at = NOW() WHERE id = $1"
+        )
+        .bind(task_id)
+        .execute(&self.pool)
+        .await
+        .map_err(|e| AppError::Database(e.to_string()))?;
+
+        if let Some(n) = notes {
+            let event_id = format!("evt-{}", uuid::Uuid::new_v4());
+            sqlx::query(
+                "INSERT INTO task_events (id, task_id, event_type, summary, created_at) VALUES ($1, $2, 'completed', $3, NOW())",
+            )
+            .bind(event_id)
+            .bind(task_id)
+            .bind(n)
+            .execute(&self.pool)
+            .await
+            .map_err(|e| AppError::Database(e.to_string()))?;
+        }
+        Ok(())
+    }
+
+    pub async fn fail_task(&self, task_id: &str, reason: &str) -> Result<(), AppError> {
+        sqlx::query(
+            "UPDATE tasks SET status = 'failed', blocked_reason = $1, updated_at = NOW() WHERE id = $2"
+        )
+        .bind(reason)
+        .bind(task_id)
+        .execute(&self.pool)
+        .await
+        .map_err(|e| AppError::Database(e.to_string()))?;
+
+        let event_id = format!("evt-{}", uuid::Uuid::new_v4());
+        sqlx::query(
+            "INSERT INTO task_events (id, task_id, event_type, summary, created_at) VALUES ($1, $2, 'failed', $3, NOW())",
+        )
+        .bind(event_id)
+        .bind(task_id)
+        .bind(reason)
+        .execute(&self.pool)
+        .await
+        .map_err(|e| AppError::Database(e.to_string()))?;
+        Ok(())
+    }
+
     pub async fn get_openclaw_snapshot_history_summary(
         &self,
     ) -> Result<OpenClawSnapshotHistorySummary, AppError> {

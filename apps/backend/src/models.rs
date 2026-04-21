@@ -211,6 +211,19 @@ pub struct TaskCreateResponse {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TaskClaimRequest {}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TaskCompleteRequest {
+    pub notes: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TaskFailRequest {
+    pub reason: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MissionCreateRequest {
     pub title: String,
     pub description: String,
@@ -323,6 +336,28 @@ pub struct UsageDataPoint {
     pub timestamp: DateTime<Utc>,
     pub tokens: i32,
     pub cost_usd: f64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SkillDefinition {
+    pub id: String,
+    pub name: String,
+    pub description: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AdminConfigUpdate {
+    pub content: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AdminConfigResponse {
+    pub content: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TelegramRequest {
+    pub message: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

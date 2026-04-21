@@ -69,7 +69,7 @@
             "openai/gpt-5.4-mini",
           ],
         },
-        skills: ["coc-tool", "repo-readonly", "backend-audit", "obsidian-memory"],
+        skills: ["coc-tool", "repo-readonly", "backend-audit", "obsidian-memory", "web-search", "web-reader", "human-messenger"],
         subagents: {
           allowAgents: ["director"],
         },
@@ -84,7 +84,7 @@
             "openai/gpt-5.4",
           ],
         },
-        skills: ["coc-tool", "repo-readonly", "backend-audit", "obsidian-memory"],
+        skills: ["coc-tool", "repo-readonly", "backend-audit", "obsidian-memory", "web-search", "web-reader", "human-messenger"],
         subagents: {
           allowAgents: ["architect", "senior-engineer", "junior-engineer", "intern"],
         },
@@ -96,7 +96,7 @@
           primary: "google/gemini-3.1-pro-preview",
           fallbacks: ["github-copilot/gpt-4o", "openai/gpt-5.4"],
         },
-        skills: ["repo-readonly", "backend-audit", "obsidian-memory"],
+        skills: ["repo-readonly", "backend-audit", "obsidian-memory", "web-search", "web-reader", "human-messenger"],
         subagents: {
           allowAgents: ["director", "senior-engineer", "junior-engineer"],
         },
@@ -111,7 +111,7 @@
             "google/gemini-3.1-pro-preview",
           ],
         },
-        skills: ["coc-tool", "repo-readonly", "backend-audit", "obsidian-memory"],
+        skills: ["coc-tool", "repo-readonly", "backend-audit", "obsidian-memory", "web-search", "web-reader", "human-messenger"],
       },
       {
         id: "junior-engineer",
@@ -123,7 +123,7 @@
             "openai/gpt-5.4-mini",
           ],
         },
-        skills: ["repo-readonly", "backend-audit", "obsidian-memory"],
+        skills: ["repo-readonly", "backend-audit", "obsidian-memory", "web-search", "web-reader", "human-messenger"],
       },
       {
         id: "intern",
@@ -134,7 +134,7 @@
             "openai/gpt-5.4-mini",
           ],
         },
-        skills: ["backend-audit", "obsidian-memory"],
+        skills: ["backend-audit", "obsidian-memory", "web-search", "web-reader", "human-messenger"],
       },
     ],
   },

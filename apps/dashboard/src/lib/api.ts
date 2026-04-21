@@ -144,6 +144,28 @@ export async function getAnalyticsSummary() {
     return apiCall<AnalyticsSummary>('/analytics/summary');
 }
 
+export async function getSkills() {
+    return apiCall<SkillDefinition[]>('/skills');
+}
+
+export async function getAdminConfig() {
+    return apiCall<{ content: string }>('/admin/config');
+}
+
+export async function updateAdminConfig(content: string) {
+    return apiCall<void>('/admin/config', {
+        method: 'POST',
+        body: JSON.stringify({ content }),
+        headers: {
+            'Content-Type': 'application/json'
+        }
+    });
+}
+
+export async function reloadAdminConfig() {
+    return apiCall<void>('/admin/config/reload', { method: 'POST' });
+}
+
 // WebSocket connection
 export function createWebSocket(
     onMessage: (data: unknown) => void,

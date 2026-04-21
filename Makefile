@@ -215,7 +215,7 @@ remote-worker-up: ## Start experimental remote worker placeholder profile (not v
 remote-worker-down: ## Stop experimental remote worker placeholder profile
 	docker compose --env-file "$(ENV_FILE)" -f "$(COMPOSE_FILE)" -f "$(COMPOSE_REMOTE_FILE)" --profile remote-worker down
 
-smoke: smoke-compose smoke-gateway smoke-openclaw smoke-timezone smoke-internal-api smoke-agent-backend ## Run all smoke tests
+smoke: smoke-compose smoke-gateway smoke-openclaw smoke-timezone smoke-internal-api smoke-agent-backend smoke-e2e-flows ## Run all smoke tests
 
 smoke-compose: ## Run compose smoke test
 	bash "$(PROJECT_ROOT)/scripts/smoke/compose-smoke.sh"
@@ -234,6 +234,9 @@ smoke-internal-api: ## Validate internal task/mission endpoints with Obsidian ou
 
 smoke-agent-backend: ## Validate authenticated agent-to-backend bridge
 	bash "$(PROJECT_ROOT)/scripts/smoke/agent-backend-smoke.sh"
+
+smoke-e2e-flows: ## Run E2E smoke tests for critical agent flows (Task Lifecycle, Schema, Obsidian)
+	bash "$(PROJECT_ROOT)/scripts/smoke/e2e-flows.sh"
 
 state-export: ## Export a sanitized data snapshot for resuming on another machine
 	bash "$(PROJECT_ROOT)/scripts/dev/export-state.sh" "$(ARCHIVE)"

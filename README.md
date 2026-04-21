@@ -96,6 +96,15 @@ These are only needed for specific modes or workflows:
    - `make compose-up-build`
    - `make post-start-verify`
    - `make post-start-notify` when deploy notifications are enabled
+   - `make smoke-e2e-flows` to verify critical agent lifecycles
+
+## 🛠 Admin & Registry
+
+The Council now features a dynamic **Skill Registry** and a file-based **Admin Control** panel:
+
+1. **Dynamic Skills**: New skills added to `.agents/skills` are automatically discovered by the backend. Agents can query available capabilities at runtime.
+2. **Admin UI**: Accessible at `/admin`, providing raw access to `openclaw.json5` and a live view of the skill registry. 
+3. **E2E Validation**: Run `make smoke-e2e-flows` to simulate full agent loops (Director -> Junior task handoff, Obsidian design persistence, and schema generation).
 
    Fresh machine with the optional tunnel profile:
    ```bash

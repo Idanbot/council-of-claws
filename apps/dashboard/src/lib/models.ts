@@ -241,3 +241,9 @@ export interface ModelUsage {
     latency_ms: number | null;
     created_at: string;
 }
+
+export interface SkillDefinition {
+    id: string;
+    name: string;
+    description: string;
+}

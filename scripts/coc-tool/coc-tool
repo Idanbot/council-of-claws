@@ -15,7 +15,13 @@ def usage() -> None:
   coc-tool health
   coc-tool mission-create --title TITLE --description DESCRIPTION
   coc-tool task-create --title TITLE --description DESCRIPTION --priority PRIORITY --target-agent AGENT [--mission-id MISSION]
+  coc-tool task-claim --task-id TASK_ID
+  coc-tool task-complete --task-id TASK_ID [--notes NOTES]
+  coc-tool task-fail --task-id TASK_ID --reason REASON
   coc-tool mission-close --mission-id MISSION [--notes NOTES]
+  coc-tool human-message --message MESSAGE
+  coc-tool log-report --level LEVEL --message MESSAGE [--target TARGET]
+  coc-tool usage-report --model MODEL --prompt-tokens TOKENS --completion-tokens TOKENS --latency-ms MS
 
 Required environment:
   COC_BACKEND_BASE_URL   Backend base URL, e.g. http://backend:8080
@@ -128,6 +134,29 @@ def main(argv: list[str]) -> int:
         print(request("POST", "/internal/tasks/create", payload))
         return 0
 
+    if command == "task-claim":
+        task_id = options.get("task_id", "")
+        if not task_id:
+            raise SystemExit("--task-id is required")
+        print(request("POST", f"/internal/tasks/{task_id}/claim", {}))
+        return 0
+
+    if command == "task-complete":
+        task_id = options.get("task_id", "")
+        notes = options.get("notes", "")
+        if not task_id:
+            raise SystemExit("--task-id is required")
+        print(request("POST", f"/internal/tasks/{task_id}/complete", {"notes": notes}))
+        return 0
+
+    if command == "task-fail":
+        task_id = options.get("task_id", "")
+        reason = options.get("reason", "")
+        if not task_id or not reason:
+            raise SystemExit("--task-id and --reason are required")
+        print(request("POST", f"/internal/tasks/{task_id}/fail", {"reason": reason}))
+        return 0
+
     if command == "mission-close":
         mission_id = options.get("mission_id", "")
         notes = options.get("notes", "")
@@ -137,6 +166,41 @@ def main(argv: list[str]) -> int:
         if notes:
             payload["notes"] = notes
         print(request("POST", f"/internal/missions/{mission_id}/close", payload))
+        return 0
+
+    if command == "human-message":
+        message = options.get("message", "")
+        if not message:
+            raise SystemExit("--message is required")
+        print(request("POST", "/api/notify/telegram", {"message": message}))
+        return 0
+
+    if command == "log-report":
+        level = options.get("level", "info")
+        message = options.get("message", "")
+        target = options.get("target", "")
+        if not message:
+            raise SystemExit("--message is required")
+        payload = {"level": level, "message": message}
+        if target:
+            payload["target"] = target
+        print(request("POST", "/api/agents/logs", payload))
+        return 0
+
+    if command == "usage-report":
+        model = options.get("model", "")
+        prompt_tokens = int(options.get("prompt_tokens", 0))
+        completion_tokens = int(options.get("completion_tokens", 0))
+        latency_ms = int(options.get("latency_ms", 0))
+        if not model:
+            raise SystemExit("--model is required")
+        payload = {
+            "model_name": model,
+            "prompt_tokens": prompt_tokens,
+            "completion_tokens": completion_tokens,
+            "latency_ms": latency_ms
+        }
+        print(request("POST", "/api/usage/report", payload))
         return 0
 
     raise SystemExit(f"Unknown command: {command}")

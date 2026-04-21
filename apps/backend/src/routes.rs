@@ -167,6 +167,9 @@ pub fn create_routes(state: AppState) -> Router {
         .route("/api/tasks/{task_id}", get(tasks_detail_handler))
         // Internal write endpoints (agent tools)
         .route("/internal/tasks/create", post(task_create_handler))
+        .route("/internal/tasks/{task_id}/claim", post(task_claim_handler))
+        .route("/internal/tasks/{task_id}/complete", post(task_complete_handler))
+        .route("/internal/tasks/{task_id}/fail", post(task_fail_handler))
         .route("/internal/missions", post(mission_create_handler))
         .route(
             "/internal/missions/{mission_id}/close",
@@ -186,12 +189,18 @@ pub fn create_routes(state: AppState) -> Router {
         .route("/api/audit", get(audit_list_handler))
         // Admin endpoints
         .route("/api/admin/rotate-secret", post(secret_rotate_handler))
+        .route("/api/admin/config", get(admin_get_config_handler))
+        .route("/api/admin/config", post(admin_update_config_handler))
+        .route("/api/admin/config/reload", post(admin_reload_config_handler))
+        .route("/api/notify/telegram", post(notify_telegram_handler))
         // Usage endpoints
         .route("/api/usage", get(usage_summary_handler))
         .route("/api/usage/report", post(usage_report_handler))
         .route("/api/usage/agents", get(usage_agents_handler))
         .route("/api/usage/models", get(usage_models_handler))
         .route("/api/analytics/summary", get(analytics_summary_handler))
+        // Skills endpoint
+        .route("/api/skills", get(skills_list_handler))
         // Events endpoint
         .route("/api/events", get(events_handler))
         .route("/api/diagnostics/report", get(diagnostics_report_handler))
@@ -485,6 +494,61 @@ async fn analytics_summary_handler(
     }))
 }
 
+async fn skills_list_handler(
+    State(state): State<Arc<AppState>>,
+) -> Json<Vec<SkillDefinition>> {
+    Json(state.openclaw_reader.discover_skills())
+}
+
+async fn admin_get_config_handler(
+    State(state): State<Arc<AppState>>,
+) -> Result<Json<AdminConfigResponse>, AppError> {
+    let content = state.openclaw_reader.read_raw_config()?;
+    Ok(Json(AdminConfigResponse { content }))
+}
+
+async fn admin_update_config_handler(
+    State(state): State<Arc<AppState>>,
+    Json(payload): Json<AdminConfigUpdate>,
+) -> Result<StatusCode, AppError> {
+    state.openclaw_reader.update_raw_config(&payload.content)?;
+    // Clear cache to force reload
+    state.openclaw_reader.clear_cache().await;
+    Ok(StatusCode::OK)
+}
+
+async fn admin_reload_config_handler(
+    State(state): State<Arc<AppState>>,
+) -> Result<StatusCode, AppError> {
+    state.openclaw_reader.clear_cache().await;
+    Ok(StatusCode::OK)
+}
+
+async fn notify_telegram_handler(
+    State(_state): State<Arc<AppState>>,
+    agent: AuthenticatedAgent,
+    Json(payload): Json<TelegramRequest>,
+) -> Result<StatusCode, AppError> {
+    let token = env::var("TELEGRAM_BOT_TOKEN").map_err(|_| AppError::Internal("TELEGRAM_BOT_TOKEN not set".to_string()))?;
+    let chat_id = env::var("TELEGRAM_CHAT_ID").map_err(|_| AppError::Internal("TELEGRAM_CHAT_ID not set".to_string()))?;
+
+    let client = reqwest::Client::new();
+    let msg = format!("<b>Agent @{} says:</b>\n{}", agent.id, payload.message);
+
+    let _ = client
+        .post(format!("https://api.telegram.org/bot{}/sendMessage", token))
+        .json(&json!({
+            "chat_id": chat_id,
+            "text": msg,
+            "parse_mode": "HTML"
+        }))
+        .send()
+        .await
+        .map_err(|e| AppError::Internal(format!("Telegram send failed: {}", e)))?;
+
+    Ok(StatusCode::OK)
+}
+
 async fn overview_handler(
     State(state): State<Arc<AppState>>,
 ) -> Result<Json<Overview>, AppError> {
@@ -710,6 +774,98 @@ async fn task_create_handler(
             Err(e)
         }
     }
+}
+
+async fn task_fail_handler(
+    State(state): State<Arc<AppState>>,
+    agent: AuthenticatedAgent,
+    Path(task_id): Path<String>,
+    Json(payload): Json<TaskFailRequest>,
+) -> Result<StatusCode, AppError> {
+    state
+        .postgres_reader
+        .fail_task(&task_id, &payload.reason)
+        .await?;
+
+    state
+        .audit_service
+        .log(
+            None,
+            Some(&agent.id),
+            AuditOperation::TaskFail,
+            Some("task"),
+            Some(&task_id),
+            true,
+            Some("success"),
+            Some(&payload.reason),
+            None,
+        )
+        .await;
+
+    Ok(StatusCode::OK)
+}
+
+async fn task_claim_handler(
+    State(state): State<Arc<AppState>>,
+    agent: AuthenticatedAgent,
+    Path(task_id): Path<String>,
+) -> Result<StatusCode, AppError> {
+    if !agent.scope.allow_task_claim {
+        return Err(AppError::PermissionDenied(
+            "agent scope profile does not permit task claiming".to_string(),
+        ));
+    }
+
+    state
+        .postgres_reader
+        .claim_task(&task_id, &agent.id)
+        .await?;
+
+    state
+        .audit_service
+        .log(
+            None,
+            Some(&agent.id),
+            AuditOperation::TaskClaim,
+            Some("task"),
+            Some(&task_id),
+            true,
+            Some("success"),
+            None,
+            None,
+        )
+        .await;
+
+    Ok(StatusCode::OK)
+}
+
+async fn task_complete_handler(
+    State(state): State<Arc<AppState>>,
+    agent: AuthenticatedAgent,
+    Path(task_id): Path<String>,
+    Json(payload): Json<TaskCompleteRequest>,
+) -> Result<StatusCode, AppError> {
+    state
+        .postgres_reader
+        .complete_task(&task_id, payload.notes.as_deref())
+        .await?;
+
+    state
+        .audit_service
+        .log(
+            None,
+            Some(&agent.id),
+            AuditOperation::TaskComplete,
+            Some("task"),
+            Some(&task_id),
+            true,
+            Some("success"),
+            payload.notes.as_deref(),
+            None,
+        )
+        .await;
+
+    Ok(StatusCode::OK)
 }
 
 async fn mission_create_handler(

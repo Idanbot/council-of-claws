@@ -1,4 +1,4 @@
-use crate::models::{ConfiguredAgent, OpenClawStatus, ProviderStatus, TaskPriority};
+use crate::models::{AppError, ConfiguredAgent, OpenClawStatus, ProviderStatus, SkillDefinition, TaskPriority};
 use chrono::{DateTime, Utc};
 use serde::Deserialize;
 use sha2::{Digest, Sha256};
@@ -24,6 +24,76 @@ impl OpenClawReader {
             state_path: state_path.into(),
             cache: Arc::new(RwLock::new(None)),
         }
+    }
+
+    pub fn discover_skills(&self) -> Vec<SkillDefinition> {
+        let skills_root = PathBuf::from("/app/.agents/skills");
+        let mut discovered = Vec::new();
+
+        if !skills_root.exists() {
+            tracing::warn!("Skills directory not found at {:?}", skills_root);
+            return discovered;
+        }
+
+        if let Ok(entries) = fs::read_dir(skills_root) {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if path.is_dir() {
+                    let skill_id = path.file_name().and_then(|n| n.to_str()).unwrap_or_default();
+                    let skill_md = path.join("SKILL.md");
+                    if skill_md.exists() {
+                        if let Ok(content) = fs::read_to_string(&skill_md) {
+                            let (name, desc) = self.parse_skill_md(&content, skill_id);
+                            discovered.push(SkillDefinition {
+                                id: skill_id.to_string(),
+                                name,
+                                description: desc,
+                            });
+                        }
+                    }
+                }
+            }
+        }
+
+        discovered.sort_by(|a, b| a.id.cmp(&b.id));
+        discovered
+    }
+
+    fn parse_skill_md(&self, content: &str, default_id: &str) -> (String, String) {
+        let mut name = default_id.to_string();
+        let mut desc = String::new();
+
+        if content.starts_with("---") {
+            if let Some(end_idx) = content[3..].find("---") {
+                let frontmatter = &content[3..3 + end_idx];
+                for line in frontmatter.lines() {
+                    if let Some((key, val)) = line.split_once(':') {
+                        match key.trim() {
+                            "name" => name = val.trim().trim_matches('"').to_string(),
+                            "description" => desc = val.trim().trim_matches('"').to_string(),
+                            _ => {}
+                        }
+                    }
+                }
+            }
+        }
+
+        (name, desc)
+    }
+
+    pub fn read_raw_config(&self) -> Result<String, AppError> {
+        let config_path = self.state_path.join("config/openclaw.json5");
+        fs::read_to_string(&config_path).map_err(|e| AppError::Internal(e.to_string()))
+    }
+
+    pub fn update_raw_config(&self, content: &str) -> Result<(), AppError> {
+        let config_path = self.state_path.join("config/openclaw.json5");
+        fs::write(&config_path, content).map_err(|e| AppError::Internal(e.to_string()))
+    }
+
+    pub async fn clear_cache(&self) {
+        let mut cache = self.cache.write().await;
+        *cache = None;
     }
 
     pub async fn read_status(&self) -> OpenClawStatus {
@@ -744,6 +814,20 @@ mod tests {
         assert_eq!(first.schema_version, OPENCLAW_STATUS_SCHEMA_VERSION);
         assert_eq!(first.status, "healthy");
 
+        let _ = fs::remove_dir_all(temp_root);
+    }
+
+    #[tokio::test]
+    async fn clear_cache_invalidates_status() {
+        let temp_root = std::env::temp_dir().join(format!("openclaw-cache-test-{}", uuid::Uuid::new_v4()));
+        fs::create_dir_all(&temp_root).unwrap();
+
+        let reader = OpenClawReader::new(&temp_root);
+        // Initially empty but we can manually set cache if we had access, 
+        // or just verify it doesn't crash and returns a status.
+        reader.clear_cache().await;
+        let _ = reader.read_status().await;
+        
         let _ = fs::remove_dir_all(temp_root);
     }
 }

@@ -97,7 +97,8 @@ services:
       - "8080"
     volumes:
       - ../../data/obsidian:/app/data/obsidian
-      - ../../data/openclaw:/app/data/openclaw:ro
+      - ../../data/openclaw:/app/data/openclaw
+      - ../../.agents:/app/.agents:ro
       - ../../data/workspace:/app/data/workspace
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8080/api/health >/dev/null 2>&1"]
