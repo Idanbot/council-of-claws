@@ -17,7 +17,7 @@ cleanup() {
 }
 trap cleanup EXIT
 
-retries=45
+retries=90
 until curl -fsS "http://127.0.0.1:18789/?token=$TOKEN" >/dev/null 2>&1; do
   retries=$((retries - 1))
   if [[ "$retries" -le 0 ]]; then

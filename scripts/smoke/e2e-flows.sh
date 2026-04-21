@@ -27,7 +27,7 @@ check_backend() {
 # --- Flow 1: Task Lifecycle ---
 flow_task_lifecycle() {
   log "Starting Flow 1: Task Lifecycle (Director -> Junior)"
-  
+
   # 1. Director creates a task for Junior
   local task_resp=$(curl -s -X POST "$BACKEND_URL/internal/tasks/create" \
     -H "Content-Type: application/json" -H "X-Agent-Id: director" -H "Authorization: Bearer $AGENT_TOKEN" \
@@ -37,13 +37,13 @@ flow_task_lifecycle() {
       "priority": "normal",
       "target_agent_id": "junior-engineer"
     }')
-  
+
   local task_id=$(echo "$task_resp" | grep -oP 'task-[a-z0-9-]+' | head -1)
   [[ -n "$task_id" ]] || error "Failed to create task"
   log "Created task: $task_id"
 
   # 2. Junior claims the task
-  # Junior token? For smoke test we use same token or skip auth if it's internal. 
+  # Junior token? For smoke test we use same token or skip auth if it's internal.
   # Actually, backend enforces auth. We use director to claim for simplicity in smoke test, or assume tokens exist.
   curl -s -X POST "$BACKEND_URL/internal/tasks/$task_id/claim" \
     -H "X-Agent-Id: junior-engineer" -H "Authorization: Bearer $AGENT_TOKEN" > /dev/null
@@ -69,7 +69,7 @@ flow_task_lifecycle() {
 # --- Flow 2: Schema to SQL ---
 flow_schema_sql() {
   log "Starting Flow 2: Schema to SQL"
-  
+
   # Simulates an agent creating a task specifically for schema generation
   local task_resp=$(curl -s -X POST "$BACKEND_URL/internal/tasks/create" \
     -H "Content-Type: application/json" -H "X-Agent-Id: director" -H "Authorization: Bearer $AGENT_TOKEN" \
@@ -87,14 +87,14 @@ flow_schema_sql() {
   curl -s -X POST "$BACKEND_URL/api/agents/logs" \
     -H "Content-Type: application/json" -H "X-Agent-Id: senior-engineer" -H "Authorization: Bearer $AGENT_TOKEN" \
     -d '{"level": "info", "message": "Generated schema.sql in workspace"}' > /dev/null
-  
+
   log "Simulated file write and log report"
 }
 
 # --- Flow 3: Obsidian Design ---
 flow_obsidian_design() {
   log "Starting Flow 3: Obsidian Design"
-  
+
   # 1. Create a mission
   local mission_resp=$(curl -s -X POST "$BACKEND_URL/internal/missions" \
     -H "Content-Type: application/json" -H "X-Agent-Id: director" -H "Authorization: Bearer $AGENT_TOKEN" \
@@ -110,10 +110,10 @@ flow_obsidian_design() {
   local close_resp=$(curl -s -X POST "$BACKEND_URL/internal/missions/$mission_id/close" \
     -H "Content-Type: application/json" -H "X-Agent-Id: director" -H "Authorization: Bearer $AGENT_TOKEN" \
     -d '{"notes": "Design finalized. High-level architecture approved."}')
-  
+
   echo "$close_resp" | grep -q "closed" || error "Failed to close mission"
   log "Mission closed and written to Obsidian"
-  
+
   # 3. Verify file exists in data/obsidian
   if [ -f "data/obsidian/Missions/${mission_id}.md" ]; then
     log "Verified: Obsidian doc created at data/obsidian/Missions/${mission_id}.md"

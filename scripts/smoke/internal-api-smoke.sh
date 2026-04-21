@@ -5,17 +5,18 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$ROOT_DIR"
 
 COMPOSE_FILE="infra/compose/docker-compose.yml"
+COMPOSE_OVERRIDE_FILE="scripts/smoke/docker-compose.internal-api-smoke.override.yml"
 PROJECT_NAME="council-of-claws"
 
 export CLOUDFLARED_TOKEN="${CLOUDFLARED_TOKEN:-smoke-token}"
 export AGENT_TOKENS="${AGENT_TOKENS:-director=smoke-director-token}"
 
 cleanup() {
-  docker compose -f "$COMPOSE_FILE" down -v || true
+  docker compose -f "$COMPOSE_FILE" -f "$COMPOSE_OVERRIDE_FILE" down -v || true
 }
 trap cleanup EXIT
 
-docker compose -f "$COMPOSE_FILE" up -d --build redis postgres backend
+docker compose -f "$COMPOSE_FILE" -f "$COMPOSE_OVERRIDE_FILE" up -d --build redis postgres backend
 
 backend_container="${PROJECT_NAME}-backend-1"
 NETWORK_NAME="$(docker inspect "$backend_container" --format '{{range $k, $v := .NetworkSettings.Networks}}{{println $k}}{{end}}' | head -n1 | tr -d '[:space:]')"
@@ -72,6 +73,7 @@ done
 
 if [[ "$backend_ready" != "true" ]]; then
   echo "Backend did not become ready in time"
+  docker compose -f "$COMPOSE_FILE" -f "$COMPOSE_OVERRIDE_FILE" logs --tail=200 postgres backend || true
   exit 1
 fi
 
@@ -117,7 +119,7 @@ if [[ "$close_incomplete_code" != "MISSION_INCOMPLETE" ]]; then
   exit 1
 fi
 
-docker compose -f "$COMPOSE_FILE" exec -T postgres \
+docker compose -f "$COMPOSE_FILE" -f "$COMPOSE_OVERRIDE_FILE" exec -T postgres \
   psql -U "${POSTGRES_USER:-council}" -d "${POSTGRES_DB:-council}" -v ON_ERROR_STOP=1 -c \
   "UPDATE tasks SET status='completed', updated_at=NOW() WHERE mission_id='${mission_id}' AND id='${task_id}';"
 

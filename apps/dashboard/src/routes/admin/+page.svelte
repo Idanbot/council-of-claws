@@ -14,10 +14,10 @@
   async function loadData() {
     loading = true;
     const [skillsRes, configRes] = await Promise.all([getSkills(), getAdminConfig()]);
-    
+
     if (skillsRes.data) skills = skillsRes.data;
     if (configRes.data) rawConfig = configRes.data.content;
-    
+
     loading = false;
   }
 
@@ -25,7 +25,7 @@
     saving = true;
     message = '';
     error = '';
-    
+
     const { error: apiError } = await updateAdminConfig(rawConfig);
     if (apiError) {
       error = apiError.message;
@@ -99,7 +99,7 @@
           <div class="h-1 w-4 bg-indigo-500 rounded-full"></div>
           OpenClaw Configuration (JSON5)
         </div>
-        
+
         {#if message}
           <div in:fade class="p-4 bg-emerald-500/10 border border-emerald-500/30 rounded text-[10px] font-bold text-emerald-400 uppercase tracking-wide">
             {message}
@@ -120,7 +120,7 @@
           ></textarea>
         </div>
         <p class="text-[9px] text-slate-600 italic">
-          Caution: Modifying openclaw.json5 directly affects agent behavior and gateway routing. 
+          Caution: Modifying openclaw.json5 directly affects agent behavior and gateway routing.
           Use 'Save Config' followed by 'Reload Registry' to apply changes.
         </p>
       </section>

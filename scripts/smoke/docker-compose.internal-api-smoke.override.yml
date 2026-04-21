@@ -1,0 +1,13 @@
+services:
+  redis:
+    volumes:
+      - internal_api_smoke_redis_data:/data
+
+  postgres:
+    volumes:
+      - internal_api_smoke_postgres_data:/var/lib/postgresql
+      - ./schema.sql:/docker-entrypoint-initdb.d/001_schema.sql:ro
+
+volumes:
+  internal_api_smoke_redis_data:
+  internal_api_smoke_postgres_data:

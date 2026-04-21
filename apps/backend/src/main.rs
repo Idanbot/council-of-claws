@@ -57,18 +57,18 @@ impl TaskPriorityOrchestrator {
     async fn orchestrate(&self) -> Result<(), AppError> {
         // 1. Fetch pending tasks sorted by priority and age
         let tasks = sqlx::query_as::<_, Task>(
-            "SELECT id, title, priority, status, owner_agent, created_at, updated_at, blocked_reason 
-             FROM tasks 
-             WHERE status = 'pending' 
-             ORDER BY 
-                CASE 
-                    WHEN priority = 'critical' THEN 0 
-                    WHEN priority = 'high' THEN 1 
-                    WHEN priority = 'normal' THEN 2 
-                    WHEN priority = 'low' THEN 3 
-                    ELSE 4 
-                END ASC, 
-                created_at ASC 
+            "SELECT id, title, priority, status, owner_agent, created_at, updated_at, blocked_reason
+             FROM tasks
+             WHERE status = 'pending'
+             ORDER BY
+                CASE
+                    WHEN priority = 'critical' THEN 0
+                    WHEN priority = 'high' THEN 1
+                    WHEN priority = 'normal' THEN 2
+                    WHEN priority = 'low' THEN 3
+                    ELSE 4
+                END ASC,
+                created_at ASC
              LIMIT 10"
         )
         .fetch_all(&self.postgres_reader.pool())

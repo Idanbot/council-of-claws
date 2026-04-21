@@ -12,7 +12,7 @@ ENV_EXAMPLE := $(PROJECT_ROOT)/.env.example
 COMPOSE_WITH_ENV := docker compose --env-file $(ENV_FILE) -f $(COMPOSE_FILE)
 
 .PHONY: help setup setup-env deps install dashboard-install backend-fetch \
-	check check-all lint format format-check ci \
+	check check-all lint format format-check precommit ci \
 	backend-check backend-test backend-fmt backend-fmt-check backend-clippy backend-run \
 	dashboard-check dashboard-test dashboard-build dashboard-dev \
 	compose-config compose-up compose-up-build compose-up-tunnel compose-up-build-tunnel compose-down compose-restart compose-ps compose-logs compose-pull gateway-url \
@@ -61,7 +61,10 @@ format: backend-fmt ## Apply formatting
 
 format-check: backend-fmt-check ## Verify formatting without changing files
 
-ci: check format-check lint smoke ## Run comprehensive quality gate (checks, lint, smoke tests) to prepare for CI/CD
+precommit: ## Run pre-commit hooks across all files (same as CI validate step)
+	uvx pre-commit run --all-files
+
+ci: precommit check format-check lint smoke ## Run comprehensive quality gate (pre-commit, checks, lint, smoke tests) to prepare for CI/CD
 
 backend-check: ## Compile-check backend
 	cargo check --manifest-path "$(BACKEND_DIR)/Cargo.toml"

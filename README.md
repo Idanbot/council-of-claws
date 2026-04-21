@@ -63,6 +63,7 @@ These are only needed for specific modes or workflows:
 - `TELEGRAM_BOT_TOKEN` and `TELEGRAM_ALLOWED_USER_IDS` in `.env` if you want the Telegram plugin enabled
 - `TELEGRAM_BOT_TOKEN`, `TELEGRAM_ALLOWED_USER_IDS`, and `DEPLOY_NOTIFICATION_ENABLED=true` in `.env` if you want an optional Telegram deploy notification after a successful verified launch
   The local deploy notification uses only the first ID from `TELEGRAM_ALLOWED_USER_IDS` if multiple IDs are comma-separated.
+- `uv` (`uvx`) if you want `make ci` to run the pre-commit validation step locally (`uvx pre-commit run --all-files`)
 
 ## 🏁 Getting Started
 
@@ -103,7 +104,7 @@ These are only needed for specific modes or workflows:
 The Council now features a dynamic **Skill Registry** and a file-based **Admin Control** panel:
 
 1. **Dynamic Skills**: New skills added to `.agents/skills` are automatically discovered by the backend. Agents can query available capabilities at runtime.
-2. **Admin UI**: Accessible at `/admin`, providing raw access to `openclaw.json5` and a live view of the skill registry. 
+2. **Admin UI**: Accessible at `/admin`, providing raw access to `openclaw.json5` and a live view of the skill registry.
 3. **E2E Validation**: Run `make smoke-e2e-flows` to simulate full agent loops (Director -> Junior task handoff, Obsidian design persistence, and schema generation).
 
    Fresh machine with the optional tunnel profile:
