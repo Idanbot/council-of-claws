@@ -1,4 +1,6 @@
-use crate::models::{AppError, ConfiguredAgent, OpenClawStatus, ProviderStatus, SkillDefinition, TaskPriority};
+use crate::models::{
+    AppError, ConfiguredAgent, OpenClawStatus, ProviderStatus, SkillDefinition, TaskPriority,
+};
 use chrono::{DateTime, Utc};
 use serde::Deserialize;
 use sha2::{Digest, Sha256};
@@ -12,10 +14,12 @@ use tokio::sync::RwLock;
 const OPENCLAW_STATUS_SCHEMA_VERSION: i32 = 1;
 const CACHE_TTL_SECONDS: i64 = 10;
 
+type CachedOpenClawStatus = Option<(DateTime<Utc>, OpenClawStatus)>;
+
 #[derive(Clone)]
 pub struct OpenClawReader {
     state_path: PathBuf,
-    cache: Arc<RwLock<Option<(DateTime<Utc>, OpenClawStatus)>>>,
+    cache: Arc<RwLock<CachedOpenClawStatus>>,
 }
 
 impl OpenClawReader {
@@ -39,7 +43,10 @@ impl OpenClawReader {
             for entry in entries.flatten() {
                 let path = entry.path();
                 if path.is_dir() {
-                    let skill_id = path.file_name().and_then(|n| n.to_str()).unwrap_or_default();
+                    let skill_id = path
+                        .file_name()
+                        .and_then(|n| n.to_str())
+                        .unwrap_or_default();
                     let skill_md = path.join("SKILL.md");
                     if skill_md.exists() {
                         if let Ok(content) = fs::read_to_string(&skill_md) {
@@ -63,9 +70,9 @@ impl OpenClawReader {
         let mut name = default_id.to_string();
         let mut desc = String::new();
 
-        if content.starts_with("---") {
-            if let Some(end_idx) = content[3..].find("---") {
-                let frontmatter = &content[3..3 + end_idx];
+        if let Some(stripped) = content.strip_prefix("---") {
+            if let Some(end_idx) = stripped.find("---") {
+                let frontmatter = &stripped[..end_idx];
                 for line in frontmatter.lines() {
                     if let Some((key, val)) = line.split_once(':') {
                         match key.trim() {
@@ -175,18 +182,19 @@ impl OpenClawReader {
         let issues = dedupe_sorted(issues);
         let source_mtime = latest_source_mtime(&self.state_path, &config_path);
         let status = derive_openclaw_status(config.is_some(), &issues);
-        let snapshot_fingerprint = build_snapshot_fingerprint(
-            &config_path,
+        let snapshot_fingerprint = build_snapshot_fingerprint(SnapshotFingerprintInput {
+            config_path: &config_path,
             source_mtime,
-            &status,
-            !runtime_catalogs.is_empty() || !runtime_auth_profiles.is_empty(),
-            &configured_agents,
-            &providers,
-            &available_model_refs,
-            &configured_model_refs,
-            &invalid_model_refs,
-            &issues,
-        );
+            status: &status,
+            runtime_state_available: !runtime_catalogs.is_empty()
+                || !runtime_auth_profiles.is_empty(),
+            configured_agents: &configured_agents,
+            providers: &providers,
+            available_model_refs: &available_model_refs,
+            configured_model_refs: &configured_model_refs,
+            invalid_model_refs: &invalid_model_refs,
+            issues: &issues,
+        });
 
         OpenClawStatus {
             schema_version: OPENCLAW_STATUS_SCHEMA_VERSION,
@@ -578,30 +586,32 @@ fn derive_openclaw_status(config_loaded: bool, issues: &[String]) -> String {
     }
 }
 
-fn build_snapshot_fingerprint(
-    config_path: &Path,
+struct SnapshotFingerprintInput<'a> {
+    config_path: &'a Path,
     source_mtime: Option<DateTime<Utc>>,
-    status: &str,
+    status: &'a str,
     runtime_state_available: bool,
-    configured_agents: &[ConfiguredAgent],
-    providers: &[ProviderStatus],
-    available_model_refs: &[String],
-    configured_model_refs: &[String],
-    invalid_model_refs: &[String],
-    issues: &[String],
-) -> String {
+    configured_agents: &'a [ConfiguredAgent],
+    providers: &'a [ProviderStatus],
+    available_model_refs: &'a [String],
+    configured_model_refs: &'a [String],
+    invalid_model_refs: &'a [String],
+    issues: &'a [String],
+}
+
+fn build_snapshot_fingerprint(input: SnapshotFingerprintInput<'_>) -> String {
     let payload = serde_json::json!({
         "schema_version": OPENCLAW_STATUS_SCHEMA_VERSION,
-        "status": status,
-        "config_path": config_path.display().to_string(),
-        "source_mtime": source_mtime,
-        "runtime_state_available": runtime_state_available,
-        "configured_agents": configured_agents,
-        "providers": providers,
-        "available_model_refs": available_model_refs,
-        "configured_model_refs": configured_model_refs,
-        "invalid_model_refs": invalid_model_refs,
-        "issues": issues,
+        "status": input.status,
+        "config_path": input.config_path.display().to_string(),
+        "source_mtime": input.source_mtime,
+        "runtime_state_available": input.runtime_state_available,
+        "configured_agents": input.configured_agents,
+        "providers": input.providers,
+        "available_model_refs": input.available_model_refs,
+        "configured_model_refs": input.configured_model_refs,
+        "invalid_model_refs": input.invalid_model_refs,
+        "issues": input.issues,
     });
     let encoded = serde_json::to_vec(&payload).unwrap_or_default();
     let digest = Sha256::digest(encoded);
@@ -819,15 +829,16 @@ mod tests {
 
     #[tokio::test]
     async fn clear_cache_invalidates_status() {
-        let temp_root = std::env::temp_dir().join(format!("openclaw-cache-test-{}", uuid::Uuid::new_v4()));
+        let temp_root =
+            std::env::temp_dir().join(format!("openclaw-cache-test-{}", uuid::Uuid::new_v4()));
         fs::create_dir_all(&temp_root).unwrap();
 
         let reader = OpenClawReader::new(&temp_root);
-        // Initially empty but we can manually set cache if we had access, 
+        // Initially empty but we can manually set cache if we had access,
         // or just verify it doesn't crash and returns a status.
         reader.clear_cache().await;
         let _ = reader.read_status().await;
-        
+
         let _ = fs::remove_dir_all(temp_root);
     }
 }

@@ -157,9 +157,7 @@ impl RedisReader {
     pub async fn set_queue_summary(&self, summary: &QueueSummary) -> Result<(), String> {
         let mut conn = self.client.clone();
         let json = serde_json::to_string(summary).map_err(|e| format!("JSON error: {}", e))?;
-        let _: redis::RedisResult<()> = conn
-            .set("dash:queue:summary", json)
-            .await;
+        let _: redis::RedisResult<()> = conn.set("dash:queue:summary", json).await;
         Ok(())
     }
 }
@@ -194,7 +192,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_redis_queue_summary_roundtrip() {
-        let redis_url = std::env::var("REDIS_URL").unwrap_or_else(|_| "redis://127.0.0.1:6379".to_string());
+        let redis_url =
+            std::env::var("REDIS_URL").unwrap_or_else(|_| "redis://127.0.0.1:6379".to_string());
         let client = match redis::Client::open(redis_url) {
             Ok(c) => c,
             Err(_) => return, // Skip if no redis
@@ -202,10 +201,12 @@ mod tests {
 
         // Use a short timeout for the connection
         let manager_future = ConnectionManager::new(client);
-        let manager = match tokio::time::timeout(std::time::Duration::from_millis(500), manager_future).await {
-            Ok(Ok(m)) => m,
-            _ => return, // Skip if timeout or error
-        };
+        let manager =
+            match tokio::time::timeout(std::time::Duration::from_millis(500), manager_future).await
+            {
+                Ok(Ok(m)) => m,
+                _ => return, // Skip if timeout or error
+            };
 
         let reader = RedisReader::new(manager);
         let summary = QueueSummary {
@@ -220,8 +221,19 @@ mod tests {
             failed: 90,
         };
 
-        if let Ok(_) = tokio::time::timeout(std::time::Duration::from_millis(500), reader.set_queue_summary(&summary)).await {
-            if let Ok(Ok(read_back)) = tokio::time::timeout(std::time::Duration::from_millis(500), reader.get_queue_summary()).await {
+        if tokio::time::timeout(
+            std::time::Duration::from_millis(500),
+            reader.set_queue_summary(&summary),
+        )
+        .await
+        .is_ok()
+        {
+            if let Ok(Ok(read_back)) = tokio::time::timeout(
+                std::time::Duration::from_millis(500),
+                reader.get_queue_summary(),
+            )
+            .await
+            {
                 assert_eq!(read_back.pending_critical, 10);
                 assert_eq!(read_back.failed, 90);
             }

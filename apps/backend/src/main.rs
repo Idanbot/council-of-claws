@@ -230,7 +230,8 @@ async fn main() {
     let router = create_routes(state.clone());
 
     // Start priority orchestrator
-    let orchestrator = TaskPriorityOrchestrator::new(state.postgres_reader.clone(), state.ws_hub.clone());
+    let orchestrator =
+        TaskPriorityOrchestrator::new(state.postgres_reader.clone(), state.ws_hub.clone());
     tokio::spawn(async move {
         orchestrator.run().await;
     });
@@ -337,10 +338,7 @@ async fn refresh_dashboard_cache(state: &AppState) -> Result<(), String> {
         .get_queue_summary()
         .await
         .map_err(|e| e.to_string())?;
-    state
-        .redis_reader
-        .set_queue_summary(&queue_summary)
-        .await?;
+    state.redis_reader.set_queue_summary(&queue_summary).await?;
 
     let existing_events: Option<String> = conn
         .get::<_, Option<String>>("dash:events:recent")

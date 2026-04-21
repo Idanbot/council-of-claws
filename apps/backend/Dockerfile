@@ -4,7 +4,7 @@
 FROM rust:1.89-alpine3.21 AS builder
 
 WORKDIR /app
-RUN apk add --no-cache musl-dev pkgconfig openssl-dev libressl-dev
+RUN apk add --no-cache musl-dev pkgconfig openssl-dev
 
 # Use sparse registry for faster updates
 ENV CARGO_REGISTRIES_CRATES_IO_PROTOCOL=sparse

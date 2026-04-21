@@ -37,6 +37,7 @@ impl AuditService {
         AuditService { tx }
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub async fn log(
         &self,
         request_id: Option<&str>,

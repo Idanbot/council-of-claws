@@ -211,9 +211,6 @@ pub struct TaskCreateResponse {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct TaskClaimRequest {}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TaskCompleteRequest {
     pub notes: Option<String>,
 }
@@ -703,12 +700,9 @@ pub enum AuditOperation {
     AgentStatusSet,
 }
 
-impl ToString for AuditOperation {
-    fn to_string(&self) -> String {
-        serde_json::to_value(self)
-            .unwrap_or_default()
-            .as_str()
-            .unwrap_or_default()
-            .to_string()
+impl fmt::Display for AuditOperation {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let value = serde_json::to_value(self).map_err(|_| fmt::Error)?;
+        f.write_str(value.as_str().unwrap_or_default())
     }
 }

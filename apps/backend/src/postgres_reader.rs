@@ -378,7 +378,11 @@ impl PostgresReader {
         )
         .fetch_one(&self.pool)
         .await
-        .map_err(|e| AppError::Database(format!("Query OpenClaw snapshot history summary error: {e}")))?;
+        .map_err(|e| {
+            AppError::Database(format!(
+                "Query OpenClaw snapshot history summary error: {e}"
+            ))
+        })?;
 
         let latest_fingerprint = sqlx::query(
             "SELECT snapshot_fingerprint
@@ -388,7 +392,11 @@ impl PostgresReader {
         )
         .fetch_optional(&self.pool)
         .await
-        .map_err(|e| AppError::Database(format!("Query latest OpenClaw snapshot fingerprint error: {e}")))?
+        .map_err(|e| {
+            AppError::Database(format!(
+                "Query latest OpenClaw snapshot fingerprint error: {e}"
+            ))
+        })?
         .map(|row| {
             use sqlx::Row;
             row.try_get("snapshot_fingerprint")

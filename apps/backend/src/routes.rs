@@ -92,7 +92,9 @@ where
             .and_then(|value| value.to_str().ok())
             .and_then(|value| value.strip_prefix("Bearer "))
             .map(str::trim)
-            .ok_or_else(|| AppError::Auth("missing Authorization: Bearer <token> header".to_string()))?;
+            .ok_or_else(|| {
+                AppError::Auth("missing Authorization: Bearer <token> header".to_string())
+            })?;
 
         let stored_hash: Option<String> = row.try_get("secret_hash").ok();
         if let Some(hash) = stored_hash {
@@ -111,11 +113,14 @@ where
             }
         } else {
             // Fallback ONLY if hash is NULL in DB (bootstrap mode)
-            let expected_token = agent_tokens_from_env().get(x_agent_id).cloned().ok_or_else(|| {
-                AppError::Auth(
-                    "agent has no secret_hash and no bootstrap token configured".to_string(),
-                )
-            })?;
+            let expected_token = agent_tokens_from_env()
+                .get(x_agent_id)
+                .cloned()
+                .ok_or_else(|| {
+                    AppError::Auth(
+                        "agent has no secret_hash and no bootstrap token configured".to_string(),
+                    )
+                })?;
 
             if provided_token != expected_token {
                 return Err(AppError::Auth(
@@ -168,7 +173,10 @@ pub fn create_routes(state: AppState) -> Router {
         // Internal write endpoints (agent tools)
         .route("/internal/tasks/create", post(task_create_handler))
         .route("/internal/tasks/{task_id}/claim", post(task_claim_handler))
-        .route("/internal/tasks/{task_id}/complete", post(task_complete_handler))
+        .route(
+            "/internal/tasks/{task_id}/complete",
+            post(task_complete_handler),
+        )
         .route("/internal/tasks/{task_id}/fail", post(task_fail_handler))
         .route("/internal/missions", post(mission_create_handler))
         .route(
@@ -191,7 +199,10 @@ pub fn create_routes(state: AppState) -> Router {
         .route("/api/admin/rotate-secret", post(secret_rotate_handler))
         .route("/api/admin/config", get(admin_get_config_handler))
         .route("/api/admin/config", post(admin_update_config_handler))
-        .route("/api/admin/config/reload", post(admin_reload_config_handler))
+        .route(
+            "/api/admin/config/reload",
+            post(admin_reload_config_handler),
+        )
         .route("/api/notify/telegram", post(notify_telegram_handler))
         // Usage endpoints
         .route("/api/usage", get(usage_summary_handler))
@@ -408,7 +419,7 @@ async fn usage_report_handler(
     let total_tokens = payload.prompt_tokens + payload.completion_tokens;
 
     // Simple cost estimation if not provided
-    let cost = payload.estimated_cost_usd.unwrap_or_else(|| {
+    let cost = payload.estimated_cost_usd.unwrap_or({
         (total_tokens as f64) * 0.000002 // Default fallback cost
     });
 
@@ -440,7 +451,12 @@ async fn analytics_summary_handler(
     // 2. Aggregate per provider
     let mut provider_stats: HashMap<String, (f64, f64, i32, i32)> = HashMap::new();
     for u in &usages {
-        let provider = u.model_name.split('/').next().unwrap_or("unknown").to_string();
+        let provider = u
+            .model_name
+            .split('/')
+            .next()
+            .unwrap_or("unknown")
+            .to_string();
         let entry = provider_stats.entry(provider).or_insert((0.0, 0.0, 0, 0));
         if let Some(lat) = u.latency_ms {
             entry.0 += lat as f64;
@@ -452,20 +468,27 @@ async fn analytics_summary_handler(
 
     let providers = provider_stats
         .into_iter()
-        .map(|(name, (total_lat, lat_count, _total_count, total_tokens))| {
-            let total_cost = usages.iter()
-                .filter(|u| u.model_name.starts_with(&name))
-                .map(|u| u.estimated_cost_usd)
-                .sum();
+        .map(
+            |(name, (total_lat, lat_count, _total_count, total_tokens))| {
+                let total_cost = usages
+                    .iter()
+                    .filter(|u| u.model_name.starts_with(&name))
+                    .map(|u| u.estimated_cost_usd)
+                    .sum();
 
-            ProviderAnalytics {
-                provider: name,
-                avg_latency_ms: if lat_count > 0.0 { total_lat / lat_count } else { 0.0 },
-                total_cost_usd: total_cost,
-                total_tokens,
-                success_rate: 1.0, // We could track failures in model_usage too
-            }
-        })
+                ProviderAnalytics {
+                    provider: name,
+                    avg_latency_ms: if lat_count > 0.0 {
+                        total_lat / lat_count
+                    } else {
+                        0.0
+                    },
+                    total_cost_usd: total_cost,
+                    total_tokens,
+                    success_rate: 1.0, // We could track failures in model_usage too
+                }
+            },
+        )
         .collect();
 
     // 3. Aggregate per hour (last 24 hours)
@@ -494,9 +517,7 @@ async fn analytics_summary_handler(
     }))
 }
 
-async fn skills_list_handler(
-    State(state): State<Arc<AppState>>,
-) -> Json<Vec<SkillDefinition>> {
+async fn skills_list_handler(State(state): State<Arc<AppState>>) -> Json<Vec<SkillDefinition>> {
     Json(state.openclaw_reader.discover_skills())
 }
 
@@ -529,8 +550,10 @@ async fn notify_telegram_handler(
     agent: AuthenticatedAgent,
     Json(payload): Json<TelegramRequest>,
 ) -> Result<StatusCode, AppError> {
-    let token = env::var("TELEGRAM_BOT_TOKEN").map_err(|_| AppError::Internal("TELEGRAM_BOT_TOKEN not set".to_string()))?;
-    let chat_id = env::var("TELEGRAM_CHAT_ID").map_err(|_| AppError::Internal("TELEGRAM_CHAT_ID not set".to_string()))?;
+    let token = env::var("TELEGRAM_BOT_TOKEN")
+        .map_err(|_| AppError::Internal("TELEGRAM_BOT_TOKEN not set".to_string()))?;
+    let chat_id = env::var("TELEGRAM_CHAT_ID")
+        .map_err(|_| AppError::Internal("TELEGRAM_CHAT_ID not set".to_string()))?;
 
     let client = reqwest::Client::new();
     let msg = format!("<b>Agent @{} says:</b>\n{}", agent.id, payload.message);
@@ -549,14 +572,8 @@ async fn notify_telegram_handler(
     Ok(StatusCode::OK)
 }
 
-async fn overview_handler(
-    State(state): State<Arc<AppState>>,
-) -> Result<Json<Overview>, AppError> {
-    state
-        .summary_builder
-        .build_overview()
-        .await
-        .map(Json)
+async fn overview_handler(State(state): State<Arc<AppState>>) -> Result<Json<Overview>, AppError> {
+    state.summary_builder.build_overview().await.map(Json)
 }
 
 async fn overview_system_handler(
@@ -630,11 +647,7 @@ async fn agents_detail_handler(
 async fn tasks_list_handler(
     State(state): State<Arc<AppState>>,
 ) -> Result<Json<Vec<Task>>, AppError> {
-    state
-        .postgres_reader
-        .get_tasks(50, 0)
-        .await
-        .map(Json)
+    state.postgres_reader.get_tasks(50, 0).await.map(Json)
 }
 
 async fn tasks_detail_handler(
@@ -1073,21 +1086,14 @@ async fn mission_close_handler(
 async fn council_list_handler(
     State(state): State<Arc<AppState>>,
 ) -> Result<Json<Vec<CouncilRun>>, AppError> {
-    state
-        .postgres_reader
-        .get_council_runs(20)
-        .await
-        .map(Json)
+    state.postgres_reader.get_council_runs(20).await.map(Json)
 }
 
 async fn council_detail_handler(
     State(state): State<Arc<AppState>>,
     Path(_council_id): Path<String>,
 ) -> Result<Json<CouncilRun>, AppError> {
-    let councils = state
-        .postgres_reader
-        .get_council_runs(1)
-        .await?;
+    let councils = state.postgres_reader.get_council_runs(1).await?;
 
     councils
         .into_iter()
@@ -1099,31 +1105,19 @@ async fn council_detail_handler(
 async fn usage_summary_handler(
     State(state): State<Arc<AppState>>,
 ) -> Result<Json<UsageSummary>, AppError> {
-    state
-        .summary_builder
-        .build_usage_summary()
-        .await
-        .map(Json)
+    state.summary_builder.build_usage_summary().await.map(Json)
 }
 
 async fn usage_agents_handler(
     State(state): State<Arc<AppState>>,
 ) -> Result<Json<Vec<ModelUsage>>, AppError> {
-    state
-        .postgres_reader
-        .get_model_usage(100)
-        .await
-        .map(Json)
+    state.postgres_reader.get_model_usage(100).await.map(Json)
 }
 
 async fn usage_models_handler(
     State(state): State<Arc<AppState>>,
 ) -> Result<Json<Vec<ModelUsage>>, AppError> {
-    state
-        .postgres_reader
-        .get_model_usage(100)
-        .await
-        .map(Json)
+    state.postgres_reader.get_model_usage(100).await.map(Json)
 }
 
 async fn events_handler(
@@ -1205,9 +1199,7 @@ async fn diagnostics_report_handler(
     let openclaw_status = openclaw_status_for_state(&state).await;
     let configured_agents_count = openclaw_status.configured_agents.len();
     let reporting_agents = live_agents.len();
-    let telemetry_status = if reporting_agents > 0 {
-        "healthy"
-    } else if configured_agents_count > 0 {
+    let telemetry_status = if reporting_agents > 0 || configured_agents_count > 0 {
         "healthy"
     } else {
         "degraded"
@@ -1513,21 +1505,13 @@ async fn agent_heartbeat_handler(
 async fn mission_history_handler(
     State(state): State<Arc<AppState>>,
 ) -> Result<Json<Vec<Mission>>, AppError> {
-    state
-        .postgres_reader
-        .get_all_missions()
-        .await
-        .map(Json)
+    state.postgres_reader.get_all_missions().await.map(Json)
 }
 
 async fn audit_list_handler(
     State(state): State<Arc<AppState>>,
 ) -> Result<Json<Vec<AuditEvent>>, AppError> {
-    state
-        .postgres_reader
-        .get_audit_events(50)
-        .await
-        .map(Json)
+    state.postgres_reader.get_audit_events(50).await.map(Json)
 }
 
 async fn is_known_agent(state: &Arc<AppState>, agent_id: &str) -> bool {
@@ -1661,6 +1645,19 @@ fn tail_backend_log(max_lines: usize) -> Vec<String> {
     lines
 }
 
+fn agent_tokens_from_env() -> HashMap<String, String> {
+    env::var("AGENT_TOKENS")
+        .ok()
+        .map(|raw| {
+            raw.split(',')
+                .filter_map(|pair| pair.split_once('='))
+                .map(|(agent, token)| (agent.trim().to_string(), token.trim().to_string()))
+                .filter(|(agent, token)| !agent.is_empty() && !token.is_empty())
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
 #[cfg(test)]
 mod route_tests {
     use super::*;
@@ -1718,17 +1715,4 @@ mod route_tests {
     fn parse_unknown_agent_state_as_idle() {
         assert_eq!(parse_agent_state("unexpected"), AgentState::Idle);
     }
-}
-
-fn agent_tokens_from_env() -> HashMap<String, String> {
-    env::var("AGENT_TOKENS")
-        .ok()
-        .map(|raw| {
-            raw.split(',')
-                .filter_map(|pair| pair.split_once('='))
-                .map(|(agent, token)| (agent.trim().to_string(), token.trim().to_string()))
-                .filter(|(agent, token)| !agent.is_empty() && !token.is_empty())
-                .collect()
-        })
-        .unwrap_or_default()
 }
